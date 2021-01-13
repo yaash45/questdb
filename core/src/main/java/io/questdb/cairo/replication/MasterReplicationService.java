@@ -413,12 +413,14 @@ public class MasterReplicationService {
                         }
 
                         reader.readTxn();
-                        if (reader.size() > nRow || reader.size() == 0) {
+                        if (reader.size() > nRow) {
                             TableReplicationPageFrameCursor cursor = factory.getPageFrameCursorFrom(sqlExecutionContext, reader.getMetadata().getTimestampIndex(), nRow);
                             nRow += cursor.size();
                             // TODO nConcurrentFrames needs to be set appropriately so that the queues can be filled
                             streamGenerator.of(tableId, connections.size(), cursor, reader.getMetadata(), initialSymbolCounts);
                             streaming = true;
+                        } else {
+                            waitingForReadyToCommit = true;
                         }
                     }
                     busy = true;

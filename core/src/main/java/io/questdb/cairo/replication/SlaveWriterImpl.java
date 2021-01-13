@@ -612,11 +612,10 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
                 newCharSize = charSize;
             }
             charMappingSize = offset + size - originalCharSize;
-            assert charMappingSize > 0;
+            assert charMappingSize >= 0;
             charMappingSize = pageSize * (charMappingSize / pageSize + 1);
             charMappingAddress = symbolMapWriter.mapSymbolCharFile(originalCharSize, charMappingSize);
             return charMappingAddress + offset - originalCharSize;
-
         }
 
         private void commit() {
