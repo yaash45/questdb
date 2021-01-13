@@ -262,7 +262,10 @@ public final class TestUtils {
                             Assert.assertEquals(r.getStr(i), l.getStr(i));
                             break;
                         case ColumnType.SYMBOL:
-                            Assert.assertEquals(r.getSym(i), l.getSym(i));
+                            // null == null
+                            if (r.getSym(i) != l.getSym(i)) {
+                                Assert.assertEquals(r.getSym(i).toString(), l.getSym(i).toString());
+                            }
                             break;
                         case ColumnType.SHORT:
                             Assert.assertEquals(r.getShort(i), l.getShort(i));

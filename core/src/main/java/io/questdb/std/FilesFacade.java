@@ -101,4 +101,8 @@ public interface FilesFacade {
     boolean allocate(long fd, long size);
 
     long write(long fd, long address, long len, long offset);
+
+    long mapFileBlock(long fd, final long mapOffset, final long mapSz);
+
+    void unmapFileBlock(final long address, final long mapSz);
 }

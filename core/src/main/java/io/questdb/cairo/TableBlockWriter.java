@@ -140,32 +140,12 @@ public class TableBlockWriter implements Closeable {
         partWriter.startPageFrame(timestampLo);
     }
 
-    public static long mapFile(FilesFacade ff, long fd, final long mapOffset, final long mapSz) {
-        long alignedMapOffset = (mapOffset / ff.getPageSize()) * ff.getPageSize();
-        long addressOffsetDueToAlignment = mapOffset - alignedMapOffset;
-        long alignedMapSz = mapSz + addressOffsetDueToAlignment;
-        long fileSz = ff.length(fd);
-        long minFileSz = mapOffset + alignedMapSz;
-        if (fileSz < minFileSz) {
-            if (!ff.allocate(fd, minFileSz)) {
-                throw CairoException.instance(ff.errno()).put("Could not allocate file for append fd=").put(fd).put(", offset=").put(mapOffset).put(", size=")
-                        .put(mapSz);
-            }
-        }
-        long address = ff.mmap(fd, alignedMapSz, alignedMapOffset, Files.MAP_RW);
-        if (address == -1) {
-            int errno = ff.errno();
-            throw CairoException.instance(ff.errno()).put("Could not mmap append fd=").put(fd).put(", offset=").put(mapOffset).put(", size=").put(mapSz).put(", errno=")
-                    .put(errno);
-        }
-        assert (address / ff.getPageSize()) * ff.getPageSize() == address; // address MUST be page aligned
-        return address + addressOffsetDueToAlignment;
+    private static long mapFile(FilesFacade ff, long fd, final long mapOffset, final long mapSz) {
+        return ff.mapFileBlock(fd, mapOffset, mapSz);
     }
 
-    public static void unmapFile(FilesFacade ff, final long address, final long mapSz) {
-        long alignedAddress = (address / ff.getPageSize()) * ff.getPageSize();
-        long alignedMapSz = mapSz + address - alignedAddress;
-        ff.munmap(alignedAddress, alignedMapSz);
+    private static void unmapFile(FilesFacade ff, final long address, final long mapSz) {
+        ff.unmapFileBlock(address, mapSz);
     }
 
     void clear() {

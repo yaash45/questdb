@@ -234,6 +234,36 @@ public class FilesFacadeImpl implements FilesFacade {
         return Files.write(fd, address, len, offset);
     }
 
+    @Override
+    public  long mapFileBlock(long fd, final long mapOffset, final long mapSz) {
+        long alignedMapOffset = (mapOffset / getPageSize()) * getPageSize();
+        long addressOffsetDueToAlignment = mapOffset - alignedMapOffset;
+        long alignedMapSz = mapSz + addressOffsetDueToAlignment;
+        long fileSz = length(fd);
+        long minFileSz = mapOffset + alignedMapSz;
+        if (fileSz < minFileSz) {
+            if (!allocate(fd, minFileSz)) {
+                throw CairoException.instance(errno()).put("Could not allocate file for append fd=").put(fd).put(", offset=").put(mapOffset).put(", size=")
+                        .put(mapSz);
+            }
+        }
+        long address = mmap(fd, alignedMapSz, alignedMapOffset, Files.MAP_RW);
+        if (address == -1) {
+            int errno = errno();
+            throw CairoException.instance(errno()).put("Could not mmap append fd=").put(fd).put(", offset=").put(mapOffset).put(", size=").put(mapSz).put(", errno=")
+                    .put(errno);
+        }
+        assert (address / getPageSize()) * getPageSize() == address; // address MUST be page aligned
+        return address + addressOffsetDueToAlignment;
+    }
+
+    @Override
+    public  void unmapFileBlock(final long address, final long mapSz) {
+        long alignedAddress = (address / getPageSize()) * getPageSize();
+        long alignedMapSz = mapSz + address - alignedAddress;
+        munmap(alignedAddress, alignedMapSz);
+    }
+
     private long computeMapPageSize() {
         long pageSize = getPageSize();
         long mapPageSize = pageSize * pageSize;

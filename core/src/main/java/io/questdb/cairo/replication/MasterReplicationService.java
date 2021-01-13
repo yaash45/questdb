@@ -4,17 +4,12 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
-import io.questdb.cairo.CairoEngine;
-import io.questdb.cairo.ColumnType;
-import io.questdb.cairo.OnePageMemory;
-import io.questdb.cairo.TableReplicationPageFrameCursor;
-import io.questdb.cairo.TableReader;
-import io.questdb.cairo.TableReplicationRecordCursorFactory;
-import io.questdb.cairo.TableUtils;
+import io.questdb.cairo.*;
 import io.questdb.cairo.replication.ReplicationMasterConnectionDemultiplexer.ReplicationMasterCallbacks;
 import io.questdb.cairo.replication.ReplicationStreamGenerator.ReplicationStreamGeneratorFrame;
 import io.questdb.cairo.replication.ReplicationStreamGenerator.ReplicationStreamGeneratorResult;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
+import io.questdb.cairo.sql.RecordMetadata;
 import io.questdb.griffin.SqlExecutionContext;
 import io.questdb.griffin.SqlExecutionContextImpl;
 import io.questdb.log.Log;
@@ -308,12 +303,16 @@ public class MasterReplicationService {
                         int metaSize = (int) ff.length(path);
                         tempMem.of(ff, path, ff.getPageSize(), metaSize);
 
-                        int frameLen = TableReplicationStreamHeaderSupport.SORS_HEADER_SIZE + metaSize;
-                        resetWriting(TableReplicationStreamHeaderSupport.FRAME_TYPE_START_OF_REPLICATION_STREAM, frameLen);
                         Unsafe.getUnsafe().putInt(bufferAddress + TableReplicationStreamHeaderSupport.OFFSET_MASTER_TABLE_ID, masterTableId);
                         Unsafe.getUnsafe().putLong(bufferAddress + TableReplicationStreamHeaderSupport.OFFSET_SORS_TABLE_STRUCTURE_VERSION, tableStructureVersion);
                         Unsafe.getUnsafe().putLong(bufferAddress + TableReplicationStreamHeaderSupport.OFFSET_SORS_INITIAL_ROW_COUNT, startingRowCount);
+                        Unsafe.getUnsafe().putLong(bufferAddress + TableReplicationStreamHeaderSupport.OFFSET_SORS_META_SIZE, metaSize);
                         Unsafe.getUnsafe().copyMemory(tempMem.addressOf(0), bufferAddress + TableReplicationStreamHeaderSupport.SORS_HEADER_SIZE, metaSize);
+                        // Add symbols column additional attributes - capacity and cached flag per each symbol
+                        final int symbolSize = serialiseSymbolReplicationBlock(bufferAddress + TableReplicationStreamHeaderSupport.SORS_HEADER_SIZE + metaSize, reader);
+                        final int frameLen = TableReplicationStreamHeaderSupport.SORS_HEADER_SIZE + metaSize + symbolSize;
+                        resetWriting(TableReplicationStreamHeaderSupport.FRAME_TYPE_START_OF_REPLICATION_STREAM, frameLen);
+
                         tableId = masterTableId;
                     } finally {
                         reader.close();
@@ -334,6 +333,21 @@ public class MasterReplicationService {
                     streamingTasks.add(streamingTask);
                     streamingTaskByPeerId.put(streamingTask.peerId, streamingTask);
                 }
+            }
+
+            private int serialiseSymbolReplicationBlock(long bufferAddress, final TableReader reader) {
+                final RecordMetadata metadata = reader.getMetadata();
+                int writeOffset = 0;
+                for(int colIndex = 0; colIndex < metadata.getColumnCount(); colIndex++) {
+                    if (metadata.getColumnType(colIndex) == ColumnType.SYMBOL) {
+                        final int capacity = reader.getSymbolMapReader(colIndex).getSymbolCapacity();
+                        Unsafe.getUnsafe().putInt(bufferAddress + writeOffset, capacity);
+                        final byte isCached = reader.getSymbolMapReader(colIndex).isCached() ? (byte)1 : 0;
+                        Unsafe.getUnsafe().putByte(bufferAddress + writeOffset + Integer.BYTES, isCached);
+                    }
+                    writeOffset += TableReplicationStreamHeaderSupport.SYMBOL_META_BLOCK_SIZE;
+                }
+                return writeOffset;
             }
         }
 
@@ -399,7 +413,7 @@ public class MasterReplicationService {
                         }
 
                         reader.readTxn();
-                        if (reader.size() > nRow) {
+                        if (reader.size() > nRow || reader.size() == 0) {
                             TableReplicationPageFrameCursor cursor = factory.getPageFrameCursorFrom(sqlExecutionContext, reader.getMetadata().getTimestampIndex(), nRow);
                             nRow += cursor.size();
                             // TODO nConcurrentFrames needs to be set appropriately so that the queues can be filled

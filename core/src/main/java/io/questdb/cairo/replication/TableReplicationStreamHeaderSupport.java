@@ -52,10 +52,12 @@ public class TableReplicationStreamHeaderSupport {
 
     public static final int OFFSET_SORS_TABLE_STRUCTURE_VERSION = OFFSET_MASTER_TABLE_ID + Integer.BYTES;
     public static final int OFFSET_SORS_INITIAL_ROW_COUNT = OFFSET_SORS_TABLE_STRUCTURE_VERSION + Long.BYTES;
-    public static final int SORS_HEADER_SIZE = OFFSET_SORS_INITIAL_ROW_COUNT + Long.BYTES;
+    public static final int OFFSET_SORS_META_SIZE = OFFSET_SORS_INITIAL_ROW_COUNT + Long.BYTES;
+    public static final int SORS_HEADER_SIZE = OFFSET_SORS_META_SIZE + Long.BYTES;
 
     public static final int MIN_HEADER_SIZE;
     public static final int MAX_HEADER_SIZE;
+    public static final int SYMBOL_META_BLOCK_SIZE = Long.BYTES;
 
     private static int[] HEADER_SIZE_BY_FRAME_TYPE;
     static {

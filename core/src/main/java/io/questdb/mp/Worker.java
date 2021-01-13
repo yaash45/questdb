@@ -148,6 +148,7 @@ public class Worker extends Thread {
 
     private void onError(int i, Throwable e) throws Throwable {
         if (haltOnError) {
+            log.error().$("unhandled error [job=").$(jobs.get(i).toString()).$(", ex=").$(e).$(']').$();
             throw e;
         }
         if (log != null) {
