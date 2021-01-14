@@ -88,10 +88,10 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
                     symbolDetailsByColumnIndex.extendAndSet(columnIndex, symDetails);
 
                 }
-                symDetails.of(writer.getMetadata().getColumnName(columnIndex), writer.getSymbolMapWriter(columnIndex).getCharMemSize());
+                symDetails.of(writer.getSymbolMapWriter(columnIndex));
             } else {
                 if (null != symDetails) {
-                    symDetails.of(null, -1);
+                    symDetails.of(null);
                 }
             }
         }
@@ -315,7 +315,7 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
                     long mappingAddress = partitionStruct.getColumnMappingStart(columnIndex);
                     if (mappingAddress != 0) {
                         long mappingSize = partitionStruct.getColumnMappingSize(columnIndex);
-                        TableBlockWriter.unmapFile(ff, mappingAddress, mappingSize);
+                        ff.unmapFileBlock(mappingAddress, mappingSize);
                         ff.close(partitionStruct.getColumnDataFd(columnIndex));
                         partitionStruct.setColumnMappingStart(columnIndex, 0);
                     }
@@ -340,7 +340,7 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
         private void preCommit(boolean lastPartition) {
             LOG.info().$("pre-commit partition [table=").$(writer.getName()).$(", lastPartition=").$(lastPartition).$(", path=").$(path).$(']').$();
             for (int nMapping = 0; nMapping < partitionStruct.nAdditionalMappings; nMapping++) {
-                TableBlockWriter.unmapFile(ff, partitionStruct.getAdditionalMappingStart(nMapping), partitionStruct.getAdditionalMappingSize(nMapping));
+                ff.unmapFileBlock(partitionStruct.getAdditionalMappingStart(nMapping), partitionStruct.getAdditionalMappingSize(nMapping));
             }
             partitionStruct.clearAdditionalMappings();
             for (int columnIndex = 0, sz = columnCount; columnIndex < sz; columnIndex++) {
@@ -447,7 +447,7 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
                     }
 
                     long mappingSize = pageSize * (size / pageSize + 1);
-                    mappingAddress = TableBlockWriter.mapFile(ff, fd, mappingOffset, mappingSize);
+                    mappingAddress = ff.mapFileBlock(fd, mappingOffset, mappingSize);
                     partitionStruct.setColumnMappingStart(columnIndex, mappingAddress);
                     partitionStruct.setColumnMappingSize(columnIndex, mappingSize);
                     partitionStruct.setColumnMappingStartOffset(columnIndex, mappingOffset);
@@ -593,17 +593,15 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
     }
 
     private class SymbolDetails {
-        private CharSequence name;
-        private long fd = -1;
         private long originalCharSize;
         private long charMappingAddress;
         private long charMappingSize;
         private long newCharSize;
+        private SymbolMapWriter symbolMapWriter;
 
-        private SymbolDetails of(CharSequence name, long charSize) {
-            assert fd == -1; // Should be cleared
-            this.name = name;
-            originalCharSize = charSize;
+        private SymbolDetails of(SymbolMapWriter symbolMapWriter) {
+            this.symbolMapWriter = symbolMapWriter;
+            originalCharSize = symbolMapWriter == null ? 0 : symbolMapWriter.getCharMemSize();
             newCharSize = 0;
             return this;
         }
@@ -613,51 +611,22 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
             if (newCharSize < charSize) {
                 newCharSize = charSize;
             }
-            if (fd != -1) {
-                assert charMappingAddress != 0;
-                if (charSize < originalCharSize + charMappingSize) {
-                    return charMappingAddress + offset - originalCharSize;
-                }
-                TableBlockWriter.unmapFile(ff, charMappingAddress, charMappingSize);
-            } else {
-                try {
-                    fd = ff.openRW(SymbolMapWriter.charFileName(path, name));
-                    if (fd < 0) {
-                        throw CairoException.instance(ff.errno()).put("could not open char file [table=").put(writer.getName()).put(", name=").put(name).put(", fd=").put(fd)
-                                .put(", size=").put(originalCharSize);
-                    }
-                } finally {
-                    path.trimTo(pathRootLen);
-                }
-            }
             charMappingSize = offset + size - originalCharSize;
-            assert charMappingSize > 0;
+            assert charMappingSize >= 0;
             charMappingSize = pageSize * (charMappingSize / pageSize + 1);
-            charMappingAddress = TableBlockWriter.mapFile(ff, fd, originalCharSize, charMappingSize);
+            charMappingAddress = symbolMapWriter.mapSymbolCharFile(originalCharSize, charMappingSize);
             return charMappingAddress + offset - originalCharSize;
         }
 
         private void commit() {
-            if (fd != -1 && newCharSize > originalCharSize) {
+            if (newCharSize > originalCharSize) {
                 originalCharSize = newCharSize;
             }
         }
 
         private void clear() {
-            if (fd != -1) {
-                if (charMappingAddress != 0) {
-                    TableBlockWriter.unmapFile(ff, charMappingAddress, charMappingSize);
-                }
-                try {
-                    if (!ff.truncate(fd, originalCharSize)) {
-                        throw CairoException.instance(ff.errno()).put("could not truncate char file for clear [table=").put(writer.getName()).put(", name=").put(name).put(", fd=").put(fd)
-                                .put(", size=").put(originalCharSize).put(", error=").put(ff.errno());
-                    }
-                } finally {
-                    charMappingAddress = 0;
-                    ff.close(fd);
-                    fd = -1;
-                }
+            if (charMappingAddress != 0) {
+                symbolMapWriter.unmapSymbolCharFile(charMappingAddress, charMappingSize);
             }
         }
     }

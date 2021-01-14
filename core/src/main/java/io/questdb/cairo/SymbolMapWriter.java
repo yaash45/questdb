@@ -48,8 +48,10 @@ public class SymbolMapWriter implements Closeable {
     private final DirectCharSequence tmpSymbol;
     private final int maxHash;
     private boolean nullValue = false;
+    private CairoConfiguration configuration;
 
     public SymbolMapWriter(CairoConfiguration configuration, Path path, CharSequence name, int symbolCount) {
+        this.configuration = configuration;
         final int plen = path.length();
         try {
             final FilesFacade ff = configuration.getFilesFacade();
@@ -154,6 +156,14 @@ public class SymbolMapWriter implements Closeable {
 
     public int getSymbolCount() {
         return offsetToKey(offsetMem.getAppendOffset());
+    }
+
+    public long mapSymbolCharFile(long fromSize, long charMappingSize) {
+        return configuration.getFilesFacade().mapFileBlock(charMem.getFd(), fromSize, charMappingSize);
+    }
+
+    public void unmapSymbolCharFile(long charMappingAddress, long charMappingSize) {
+        configuration.getFilesFacade().unmapFileBlock(charMappingAddress, charMappingSize);
     }
 
     public int put(char c) {

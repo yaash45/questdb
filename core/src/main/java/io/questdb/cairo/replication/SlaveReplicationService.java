@@ -4,17 +4,7 @@ import java.io.Closeable;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
-import io.questdb.cairo.AppendMemory;
-import io.questdb.cairo.CairoConfiguration;
-import io.questdb.cairo.CairoEngine;
-import io.questdb.cairo.CairoException;
-import io.questdb.cairo.ColumnType;
-import io.questdb.cairo.SymbolMapReader;
-import io.questdb.cairo.SymbolMapWriter;
-import io.questdb.cairo.TableReader;
-import io.questdb.cairo.TableReaderMetadata;
-import io.questdb.cairo.TableUtils;
-import io.questdb.cairo.TableWriter;
+import io.questdb.cairo.*;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
@@ -23,7 +13,6 @@ import io.questdb.mp.WorkerPool;
 import io.questdb.network.Net;
 import io.questdb.network.NetworkFacade;
 import io.questdb.std.CharSequenceHashSet;
-import io.questdb.std.Files;
 import io.questdb.std.FilesFacade;
 import io.questdb.std.IntList;
 import io.questdb.std.LongHashSet;
@@ -455,6 +444,7 @@ public class SlaveReplicationService {
                 private int inetPort;
                 private boolean connected;
                 private int masterTableId;
+                private final FileTableStructure fileTableStructure = new FileTableStructure();
 
                 protected InitialSlaveConnection(NetworkFacade nf) {
                     super(nf);
@@ -604,10 +594,12 @@ public class SlaveReplicationService {
                 private boolean createTable() {
                     // Create the table
                     long metaDataOffset = TableReplicationStreamHeaderSupport.SORS_HEADER_SIZE;
-                    long metaDataLength = bufferLen - metaDataOffset;
+                    long metaDataLength = Unsafe.getUnsafe().getLong(bufferAddress + TableReplicationStreamHeaderSupport.OFFSET_SORS_META_SIZE);
                     try {
-                        TableUtils.cloneTableStructure(ff, mem1, mem2, path, configuration.getRoot(), getTableName(), bufferAddress + metaDataOffset, metaDataLength,
-                                configuration.getMkDirMode(), (int) engine.getNextTableId());
+                        TableStructure tableStructure = fileTableStructure.ofTableMeta(bufferAddress + metaDataOffset, metaDataLength, getTableName(), configuration.getDefaultSymbolCapacity())
+                                .ofSymbolBlock(bufferAddress + metaDataOffset + metaDataLength, bufferLen - (metaDataOffset + metaDataLength));
+
+                        TableUtils.createTable(ff, mem1, path, root, tableStructure, configuration.getMkDirMode(), ColumnType.VERSION, (int) engine.getNextTableId());
                         writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, getTableName());
                         return true;
                     }catch (CairoException ex) {
