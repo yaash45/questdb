@@ -24,13 +24,43 @@
 
 package io.questdb.griffin.model;
 
-public interface ExecutionModel {
-    int QUERY = 1;
-    int CREATE_TABLE = 2;
-    int RENAME_TABLE = 3;
-    int INSERT = 4;
-    int COPY = 5;
-    int REPLICATE = 6;
+import io.questdb.std.Mutable;
+import io.questdb.std.ObjectFactory;
+import io.questdb.std.Sinkable;
+import io.questdb.std.str.CharSink;
 
-    int getModelType();
+public class ReplicateModel implements ExecutionModel, Mutable, Sinkable {
+    public static final ObjectFactory<ReplicateModel> FACTORY = ReplicateModel::new;
+    private ExpressionNode tableName;
+    private ExpressionNode masterName;
+
+    @Override
+    public void clear() {
+    }
+
+    public ExpressionNode getMasterName() {
+        return masterName;
+    }
+
+    public void setFileName(ExpressionNode masterName) {
+        this.masterName = masterName;
+    }
+
+    @Override
+    public int getModelType() {
+        return ExecutionModel.REPLICATE;
+    }
+
+    public ExpressionNode getTableName() {
+        return tableName;
+    }
+
+    public void setTableName(ExpressionNode tableName) {
+        this.tableName = tableName;
+    }
+
+
+    @Override
+    public void toSink(CharSink sink) {
+    }
 }

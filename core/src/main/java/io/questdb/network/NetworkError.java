@@ -25,6 +25,7 @@
 package io.questdb.network;
 
 import io.questdb.std.FlyweightMessageContainer;
+import io.questdb.std.Os;
 import io.questdb.std.Sinkable;
 import io.questdb.std.ThreadLocal;
 import io.questdb.std.str.CharSink;
@@ -56,7 +57,7 @@ public class NetworkError extends Error implements Sinkable, FlyweightMessageCon
     }
 
     public NetworkError couldNotBindSocket(CharSequence who, int ipv4, int port) {
-        return this.put("could not bind socket [who=").put(who).put(", bindTo=").ip(ipv4).put(':').put(port).put(']');
+        return this.put("could not bind socket [who=").put(who).put(", errno=").put(Os.errno()).put(", bindTo=").ip(ipv4).put(':').put(port).put(']');
     }
 
     @Override

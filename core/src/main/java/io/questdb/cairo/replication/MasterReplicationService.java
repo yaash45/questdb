@@ -22,7 +22,7 @@ import io.questdb.std.*;
 import io.questdb.std.str.DirectCharSequence;
 import io.questdb.std.str.Path;
 
-public class MasterReplicationService {
+public class MasterReplicationService implements Closeable {
     private static final Log LOG = LogFactory.getLog(MasterReplicationService.class);
     private static final AtomicLong NEXT_PEER_ID = new AtomicLong();
     private final NetworkFacade nf;
@@ -31,24 +31,29 @@ public class MasterReplicationService {
     private final CharSequence root;
     private final ReplicationMasterConnectionDemultiplexer masterConnectionDemux;
 
-    public MasterReplicationService(NetworkFacade nf, FilesFacade ff, CharSequence root, CairoEngine engine, MasterReplicationConfiguration masterReplicationConf, WorkerPool workerPool) {
-        this.nf = nf;
+    public MasterReplicationService(
+            FilesFacade ff,
+            CharSequence root,
+            CairoEngine engine,
+            MasterReplicationConfiguration masterReplicationConf,
+            WorkerPool workerPool) {
+        this.nf = masterReplicationConf.getNetworkFacade();
         this.ff = ff;
         this.engine = engine;
         this.root = root;
 
-        int sz = masterReplicationConf.masterIps.size();
+        int sz = masterReplicationConf.getMasterIps().size();
         LongList listenFds = new LongList(sz);
         for (int n = 0; n < sz; n++) {
             long listenFd = nf.socketTcp(true);
-            CharSequence ipv4Address = masterReplicationConf.masterIps.get(n);
-            int port = masterReplicationConf.masterPorts.get(n);
+            CharSequence ipv4Address = masterReplicationConf.getMasterIps().get(n);
+            int port = masterReplicationConf.getMasterPorts().get(n);
             if (!nf.bindTcp(listenFd, ipv4Address, port)) {
                 LOG.error().$("replication master failed to bind to ").$(ipv4Address).$(':').$(port).$(" with error ").$(nf.errno()).$();
                 nf.close(listenFd);
                 continue;
             }
-            nf.listen(listenFd, masterReplicationConf.backlog);
+            nf.listen(listenFd, masterReplicationConf.getBacklog());
             listenFds.add(listenFd);
             nf.configureNonBlocking(listenFd);
             LOG.info().$("replication master listening on ").$(ipv4Address).$(':').$(port).$(" [fd=").$(listenFd).$(']').$();
@@ -75,17 +80,9 @@ public class MasterReplicationService {
         workerPool.assign(0, job::close);
     }
 
-    public static class MasterReplicationConfiguration {
-        private ObjList<CharSequence> masterIps;
-        private IntList masterPorts;
-        private int backlog;
-
-        public MasterReplicationConfiguration(ObjList<CharSequence> masterIps, IntList masterPorts, int backlog) {
-            super();
-            this.masterIps = masterIps;
-            this.masterPorts = masterPorts;
-            this.backlog = backlog;
-        }
+    @Override
+    public void close() throws IOException {
+        // TODO: release resources. So far not obvious what to release
     }
 
     private class ReplicationMasterControllerJob extends SynchronizedJob {

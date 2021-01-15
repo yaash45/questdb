@@ -80,6 +80,8 @@ public interface CairoConfiguration {
 
     int getReaderPoolMaxSegments();
 
+    int getReplicatePoolCapacity();
+
     CharSequence getRoot();
 
     // null input root disables "copy" sql

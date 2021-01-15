@@ -22,15 +22,20 @@
  *
  ******************************************************************************/
 
-package io.questdb.griffin.model;
+package io.questdb.cairo.replication;
 
-public interface ExecutionModel {
-    int QUERY = 1;
-    int CREATE_TABLE = 2;
-    int RENAME_TABLE = 3;
-    int INSERT = 4;
-    int COPY = 5;
-    int REPLICATE = 6;
+import io.questdb.network.NetworkFacade;
+import io.questdb.std.IntList;
+import io.questdb.std.ObjList;
 
-    int getModelType();
+public interface MasterReplicationConfiguration {
+    int getBacklog();
+
+    ObjList<CharSequence> getMasterIps();
+
+    IntList getMasterPorts();
+
+    NetworkFacade getNetworkFacade();
+
+    boolean isEnabled();
 }

@@ -169,6 +169,11 @@ public class DefaultCairoConfiguration implements CairoConfiguration {
     }
 
     @Override
+    public int getReplicatePoolCapacity() {
+        return 5;
+    }
+
+    @Override
     public CharSequence getRoot() {
         return root;
     }

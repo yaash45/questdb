@@ -14,7 +14,6 @@ import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.CairoEngine;
 import io.questdb.cairo.DefaultCairoConfiguration;
 import io.questdb.cairo.TableUtils;
-import io.questdb.cairo.replication.MasterReplicationService.MasterReplicationConfiguration;
 import io.questdb.cairo.replication.SlaveReplicationService.SlaveReplicationConfiguration;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
 import io.questdb.cairo.sql.RecordCursor;
@@ -380,9 +379,9 @@ public class ReplicationTest extends AbstractGriffinTest {
         ObjList<CharSequence> masterIps = new ObjList<>();
         masterIps.add("0.0.0.0");
         IntList masterPorts = getListenPorts(masterIps);
-        MasterReplicationConfiguration masterReplicationConf = new MasterReplicationConfiguration(masterIps, masterPorts, 4);
+        MasterReplicationConfiguration masterReplicationConf = new DefaultMasterReplicationConfiguration(masterIps, masterPorts, 4, true, NF);
         SlaveReplicationService slaveReplicationService = new SlaveReplicationService(slaveConfiguration, NF, slaveEngine, workerPool);
-        MasterReplicationService masterReplicationService = new MasterReplicationService(NF, configuration.getFilesFacade(),
+        MasterReplicationService masterReplicationService = new MasterReplicationService(configuration.getFilesFacade(),
                 configuration.getRoot(), engine, masterReplicationConf,
                 workerPool);
         workerPool.start(LOG);
