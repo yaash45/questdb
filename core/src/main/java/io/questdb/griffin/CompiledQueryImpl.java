@@ -117,4 +117,8 @@ public class CompiledQueryImpl implements CompiledQuery {
     CompiledQuery ofBackupTable() {
         return of(BACKUP_TABLE);
     }
+
+    CompiledQuery ofReplicate() {
+        return of(REPLICATE);
+    }
 }

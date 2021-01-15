@@ -88,6 +88,7 @@ public class PropServerConfiguration implements ServerConfiguration {
     private final int mkdirMode;
     private final int parallelIndexThreshold;
     private final int readerPoolMaxSegments;
+    private final int replicatePoolCapacity;
     private final long spinLockTimeoutUs;
     private final int sqlCacheRows;
     private final int sqlCacheBlocks;
@@ -475,6 +476,7 @@ public class PropServerConfiguration implements ServerConfiguration {
         this.mkdirMode = getInt(properties, env, "cairo.mkdir.mode", 509);
         this.parallelIndexThreshold = getInt(properties, env, "cairo.parallel.index.threshold", 100000);
         this.readerPoolMaxSegments = getInt(properties, env, "cairo.reader.pool.max.segments", 5);
+        this.replicatePoolCapacity = getInt(properties, env, "cairo.sql.replicate.model.pool.capacity", 5);
         this.spinLockTimeoutUs = getLong(properties, env, "cairo.spin.lock.timeout", 1_000_000);
         this.sqlCacheRows = getInt(properties, env, "cairo.cache.rows", 16);
         this.sqlCacheBlocks = getIntSize(properties, env, "cairo.cache.blocks", 4);
@@ -1377,6 +1379,11 @@ public class PropServerConfiguration implements ServerConfiguration {
         @Override
         public int getReaderPoolMaxSegments() {
             return readerPoolMaxSegments;
+        }
+
+        @Override
+        public int getReplicatePoolCapacity() {
+            return replicatePoolCapacity;
         }
 
         @Override

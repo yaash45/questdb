@@ -54,6 +54,7 @@ public final class SqlParser {
     private final ObjectPool<WithClauseModel> withClauseModelPool;
     private final ObjectPool<InsertModel> insertModelPool;
     private final ObjectPool<CopyModel> copyModelPool;
+    private final ObjectPool<ReplicateModel> replicateModelPool;
     private final ExpressionParser expressionParser;
     private final CairoConfiguration configuration;
     private final PostOrderTreeTraversalAlgo traversalAlgo;
@@ -86,6 +87,7 @@ public final class SqlParser {
         this.withClauseModelPool = new ObjectPool<>(WithClauseModel.FACTORY, configuration.getWithClauseModelPoolCapacity());
         this.insertModelPool = new ObjectPool<>(InsertModel.FACTORY, configuration.getInsertPoolCapacity());
         this.copyModelPool = new ObjectPool<>(CopyModel.FACTORY, configuration.getCopyPoolCapacity());
+        this.replicateModelPool = new ObjectPool<ReplicateModel>(ReplicateModel.FACTORY, configuration.getCopyPoolCapacity());
         this.configuration = configuration;
         this.traversalAlgo = traversalAlgo;
         this.characterStore = characterStore;
@@ -301,7 +303,30 @@ public final class SqlParser {
             return parseCopy(lexer);
         }
 
+        if (isReplicateKeyword(tok)) {
+            return parseReplicate(lexer);
+        }
+
         return parseSelect(lexer);
+    }
+
+    private ExecutionModel parseReplicate(GenericLexer lexer) throws SqlException {
+        CharSequence tok = tok(lexer, "'table'");
+        if (isTableKeyword(tok)) {
+            ExpressionNode tableName = expectExpr(lexer);
+            tok = tok(lexer, "'from'");
+            if (isFromKeyword(tok)) {
+                final ExpressionNode masterNodeName = expectExpr(lexer);
+                ReplicateModel model = replicateModelPool.next();
+                model.setTableName(tableName);
+                model.setFileName(masterNodeName);
+
+                return model;
+            }
+            throw SqlException.$(lexer.lastTokenPosition(), "'from' expected");
+        }
+
+        throw SqlException.$(lexer.lastTokenPosition(), "'table' expected");
     }
 
     QueryModel parseAsSubQuery(GenericLexer lexer, @Nullable LowerCaseCharSequenceObjHashMap<WithClauseModel> withClauses) throws SqlException {
