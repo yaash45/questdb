@@ -27,6 +27,7 @@ package io.questdb;
 import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.CairoSecurityContext;
 import io.questdb.cairo.CommitMode;
+import io.questdb.cairo.replication.MasterReplicationConfiguration;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
 import io.questdb.cutlass.http.*;
 import io.questdb.cutlass.http.processors.JsonQueryProcessorConfiguration;
@@ -54,7 +55,9 @@ import io.questdb.std.datetime.microtime.TimestampFormatFactory;
 import io.questdb.std.datetime.millitime.DateFormatFactory;
 import io.questdb.std.datetime.millitime.MillisecondClock;
 import io.questdb.std.datetime.millitime.MillisecondClockImpl;
+import io.questdb.std.str.CharSink;
 import io.questdb.std.str.Path;
+import io.questdb.std.str.StringSink;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
@@ -297,6 +300,11 @@ public class PropServerConfiguration implements ServerConfiguration {
     private int httpMinRcvBufSize;
     private int httpMinSndBufSize;
     private final BuildInformation buildInformation;
+    private final MasterReplicationConfiguration masterReplicationConfiguration = new PropMasterReplicationConfiguration();
+    private int masterReplicationBacklog;
+    private ObjList<CharSequence> masterReplicationIps = new ObjList<>();
+    private IntList materReplicationPorts = new IntList();
+    private boolean masterReplicationIsEnabled;
 
     public PropServerConfiguration(
             String root,
@@ -617,8 +625,20 @@ public class PropServerConfiguration implements ServerConfiguration {
                 this.lineTcpAuthDbPath = new File(root, this.lineTcpAuthDbPath).getAbsolutePath();
             }
         }
-
         this.buildInformation = buildInformation;
+        readMasterReplicationConfiguration(properties, env);
+    }
+
+    private void readMasterReplicationConfiguration(Properties properties, Map<String, String> env) throws ServerConfigurationException {
+        this.masterReplicationIsEnabled = getBoolean(properties, env, "replication.master.enabled", true);
+        this.masterReplicationBacklog = getInt(properties, env, "replication.master.backlog", 4);
+        StringSink sink = new StringSink();
+        parseMultiBindTo(properties, env, "replication.master.bindTo", "0.0.0.0:9004", ',', (a, p) -> {
+            sink.clear();
+            Net.appendIP4(sink, a);
+            this.masterReplicationIps.add(sink.toString());
+            this.materReplicationPorts.add(p);
+        });
     }
 
     @Override
@@ -644,6 +664,11 @@ public class PropServerConfiguration implements ServerConfiguration {
     @Override
     public LineTcpReceiverConfiguration getLineTcpReceiverConfiguration() {
         return lineTcpReceiverConfiguration;
+    }
+
+    @Override
+    public MasterReplicationConfiguration getMasterReplicationConfiguration() {
+        return masterReplicationConfiguration;
     }
 
     @Override
@@ -811,30 +836,54 @@ public class PropServerConfiguration implements ServerConfiguration {
             String defaultValue,
             BindToParser parser
     ) throws ServerConfigurationException {
+        parseMultiBindTo(properties, env, key, defaultValue, (char) 0, (a, p) -> {
+            parser.onReady(a, p);
+        });
+    }
 
-        final String bindTo = getString(properties, env, key, defaultValue);
-        final int colonIndex = bindTo.indexOf(':');
-        if (colonIndex == -1) {
-            throw new ServerConfigurationException(key, bindTo);
+    protected void parseMultiBindTo(
+            Properties properties,
+            Map<String, String> env,
+            String key,
+            String defaultValue,
+            char delimiter,
+            BindToParser parser
+    ) throws ServerConfigurationException {
+
+        final String bindToList = getString(properties, env, key, defaultValue);
+        int index = 0;
+        while (index < bindToList.length()) {
+            int tokenEnd = bindToList.indexOf(delimiter, index);
+            if (tokenEnd < 0) {
+                tokenEnd = bindToList.length();
+            }
+            String bindTo = bindToList.substring(index, tokenEnd);
+
+            final int colonIndex = bindTo.indexOf(':');
+            if (colonIndex == -1) {
+                throw new ServerConfigurationException(key, bindTo);
+            }
+
+            final String ipv4Str = bindTo.substring(0, colonIndex);
+            int ipV4;
+            try {
+                // Validate IP format.
+                ipV4 = Net.parseIPv4(ipv4Str);
+            } catch (NetworkError e) {
+                throw new ServerConfigurationException(key, ipv4Str);
+            }
+
+            final String portStr = bindTo.substring(colonIndex + 1);
+            final int port;
+            try {
+                port = Numbers.parseInt(portStr);
+            } catch (NumericException e) {
+                throw new ServerConfigurationException(key, portStr);
+            }
+
+            parser.onReady(ipV4, port);
+            index = tokenEnd;
         }
-
-        final String ipv4Str = bindTo.substring(0, colonIndex);
-        final int ipv4;
-        try {
-            ipv4 = Net.parseIPv4(ipv4Str);
-        } catch (NetworkError e) {
-            throw new ServerConfigurationException(key, ipv4Str);
-        }
-
-        final String portStr = bindTo.substring(colonIndex + 1);
-        final int port;
-        try {
-            port = Numbers.parseInt(portStr);
-        } catch (NumericException e) {
-            throw new ServerConfigurationException(key, portStr);
-        }
-
-        parser.onReady(ipv4, port);
     }
 
     @FunctionalInterface
@@ -1985,6 +2034,34 @@ public class PropServerConfiguration implements ServerConfiguration {
         @Override
         public SqlInterruptorConfiguration getInterruptorConfiguration() {
             return interruptorConfiguration;
+        }
+    }
+
+    private class PropMasterReplicationConfiguration implements  MasterReplicationConfiguration {
+
+        @Override
+        public int getBacklog() {
+            return masterReplicationBacklog;
+        }
+
+        @Override
+        public ObjList<CharSequence> getMasterIps() {
+            return masterReplicationIps;
+        }
+
+        @Override
+        public IntList getMasterPorts() {
+            return materReplicationPorts;
+        }
+
+        @Override
+        public NetworkFacade getNetworkFacade() {
+            return NetworkFacadeImpl.INSTANCE;
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return masterReplicationIsEnabled;
         }
     }
 

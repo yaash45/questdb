@@ -22,32 +22,20 @@
  *
  ******************************************************************************/
 
-package io.questdb;
+package io.questdb.cairo.replication;
 
-import io.questdb.cairo.CairoConfiguration;
-import io.questdb.cairo.replication.MasterReplicationConfiguration;
-import io.questdb.cutlass.http.HttpMinServerConfiguration;
-import io.questdb.cutlass.http.HttpServerConfiguration;
-import io.questdb.cutlass.line.tcp.LineTcpReceiverConfiguration;
-import io.questdb.cutlass.line.udp.LineUdpReceiverConfiguration;
-import io.questdb.cutlass.pgwire.PGWireConfiguration;
-import io.questdb.mp.WorkerPoolConfiguration;
+import io.questdb.network.NetworkFacade;
+import io.questdb.std.IntList;
+import io.questdb.std.ObjList;
 
-public interface ServerConfiguration {
+public interface MasterReplicationConfiguration {
+    int getBacklog();
 
-    CairoConfiguration getCairoConfiguration();
+    ObjList<CharSequence> getMasterIps();
 
-    HttpServerConfiguration getHttpServerConfiguration();
+    IntList getMasterPorts();
 
-    HttpMinServerConfiguration getHttpMinServerConfiguration();
+    NetworkFacade getNetworkFacade();
 
-    LineUdpReceiverConfiguration getLineUdpReceiverConfiguration();
-
-    LineTcpReceiverConfiguration getLineTcpReceiverConfiguration();
-
-    MasterReplicationConfiguration getMasterReplicationConfiguration();
-
-    WorkerPoolConfiguration getWorkerPoolConfiguration();
-
-    PGWireConfiguration getPGWireConfiguration();
+    boolean isEnabled();
 }

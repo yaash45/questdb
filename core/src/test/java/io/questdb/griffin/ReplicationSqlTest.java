@@ -32,7 +32,6 @@ import org.junit.*;
 
 import java.io.IOException;
 
-import static io.questdb.griffin.CompiledQuery.ALTER;
 import static io.questdb.griffin.CompiledQuery.REPLICATE;
 
 public class ReplicationSqlTest extends AbstractGriffinTest {
@@ -59,7 +58,6 @@ public class ReplicationSqlTest extends AbstractGriffinTest {
         StatelessGriffinTest.afterClass(masterState);
     }
 
-
     @Before
     public void setUp3() {
         SharedRandom.RANDOM.set(new Rnd());
@@ -70,7 +68,7 @@ public class ReplicationSqlTest extends AbstractGriffinTest {
         assertMemoryLeak(
                 () -> {
                     createX();
-                    Assert.assertEquals(REPLICATE, runSlaveSql("replicate table \"temperature\" from \"LON\"").getType());
+                    Assert.assertEquals(REPLICATE, runSlaveSql("replicate table \"x\" from \"LON\"").getType());
                 }
         );
     }
