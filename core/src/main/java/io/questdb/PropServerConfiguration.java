@@ -28,6 +28,7 @@ import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.CairoSecurityContext;
 import io.questdb.cairo.CommitMode;
 import io.questdb.cairo.replication.MasterReplicationConfiguration;
+import io.questdb.cairo.replication.SlaveReplicationConfiguration;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
 import io.questdb.cutlass.http.*;
 import io.questdb.cutlass.http.processors.JsonQueryProcessorConfiguration;
@@ -305,6 +306,11 @@ public class PropServerConfiguration implements ServerConfiguration {
     private ObjList<CharSequence> masterReplicationIps = new ObjList<>();
     private IntList materReplicationPorts = new IntList();
     private boolean masterReplicationIsEnabled;
+    private SlaveReplicationConfiguration slaveReplicationConfiguration = new PropSlaveReplicationConfiguration();
+    private boolean slaveReplicationEnabled;
+    private int slaveReplicationNewConnectionQueueLen;
+    private int slaveReplicationInstructionQueueLen;
+    private int slaveReplicationConnectionCallbackQueueLen;
 
     public PropServerConfiguration(
             String root,
@@ -627,6 +633,10 @@ public class PropServerConfiguration implements ServerConfiguration {
         }
         this.buildInformation = buildInformation;
         readMasterReplicationConfiguration(properties, env);
+        readSlaveReplicationConfiguration(properties, env);
+    }
+
+    private void readSlaveReplicationConfiguration(Properties properties, Map<String, String> env) {
     }
 
     private void readMasterReplicationConfiguration(Properties properties, Map<String, String> env) throws ServerConfigurationException {
@@ -669,6 +679,11 @@ public class PropServerConfiguration implements ServerConfiguration {
     @Override
     public MasterReplicationConfiguration getMasterReplicationConfiguration() {
         return masterReplicationConfiguration;
+    }
+
+    @Override
+    public SlaveReplicationConfiguration getSlaveReplicationConfiguration() {
+        return slaveReplicationConfiguration;
     }
 
     @Override
@@ -2349,6 +2364,33 @@ public class PropServerConfiguration implements ServerConfiguration {
         @Override
         public boolean isEnabled() {
             return httpMinServerEnabled;
+        }
+    }
+
+    private class PropSlaveReplicationConfiguration implements SlaveReplicationConfiguration {
+        @Override
+        public int getConnectionCallbackQueueLen() {
+            return slaveReplicationConnectionCallbackQueueLen;
+        }
+
+        @Override
+        public int getInstructionQueueLen() {
+            return slaveReplicationInstructionQueueLen;
+        }
+
+        @Override
+        public NetworkFacade getNetworkFacade() {
+            return NetworkFacadeImpl.INSTANCE;
+        }
+
+        @Override
+        public int getNewConnectionQueueLen() {
+            return slaveReplicationNewConnectionQueueLen;
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return slaveReplicationEnabled;
         }
     }
 }

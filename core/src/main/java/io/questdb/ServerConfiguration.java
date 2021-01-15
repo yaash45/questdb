@@ -26,6 +26,7 @@ package io.questdb;
 
 import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.replication.MasterReplicationConfiguration;
+import io.questdb.cairo.replication.SlaveReplicationConfiguration;
 import io.questdb.cutlass.http.HttpMinServerConfiguration;
 import io.questdb.cutlass.http.HttpServerConfiguration;
 import io.questdb.cutlass.line.tcp.LineTcpReceiverConfiguration;
@@ -46,6 +47,8 @@ public interface ServerConfiguration {
     LineTcpReceiverConfiguration getLineTcpReceiverConfiguration();
 
     MasterReplicationConfiguration getMasterReplicationConfiguration();
+
+    SlaveReplicationConfiguration getSlaveReplicationConfiguration();
 
     WorkerPoolConfiguration getWorkerPoolConfiguration();
 

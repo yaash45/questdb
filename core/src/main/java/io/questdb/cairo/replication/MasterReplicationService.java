@@ -81,7 +81,7 @@ public class MasterReplicationService implements Closeable {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         // TODO: release resources. So far not obvious what to release
     }
 

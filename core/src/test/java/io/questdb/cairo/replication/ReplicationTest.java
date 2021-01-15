@@ -14,7 +14,6 @@ import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.CairoEngine;
 import io.questdb.cairo.DefaultCairoConfiguration;
 import io.questdb.cairo.TableUtils;
-import io.questdb.cairo.replication.SlaveReplicationService.SlaveReplicationConfiguration;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
 import io.questdb.cairo.sql.RecordCursor;
 import io.questdb.cairo.sql.RecordCursorFactory;
@@ -380,7 +379,8 @@ public class ReplicationTest extends AbstractGriffinTest {
         masterIps.add("0.0.0.0");
         IntList masterPorts = getListenPorts(masterIps);
         MasterReplicationConfiguration masterReplicationConf = new DefaultMasterReplicationConfiguration(masterIps, masterPorts, 4, true, NF);
-        SlaveReplicationService slaveReplicationService = new SlaveReplicationService(slaveConfiguration, NF, slaveEngine, workerPool);
+        SlaveReplicationConfiguration slaveReplicationConfiguration = new DefaultSlaveReplicationConfiguration(2, 2, 8, true, NF);
+        SlaveReplicationService slaveReplicationService = new SlaveReplicationService(slaveConfiguration, slaveEngine, workerPool, slaveReplicationConfiguration);
         MasterReplicationService masterReplicationService = new MasterReplicationService(configuration.getFilesFacade(),
                 configuration.getRoot(), engine, masterReplicationConf,
                 workerPool);
@@ -393,7 +393,8 @@ public class ReplicationTest extends AbstractGriffinTest {
 
         ObjList<CharSequence> slaveIps = new ObjList<>();
         slaveIps.add("127.0.0.1");
-        SlaveReplicationConfiguration replicationConf = new SlaveReplicationConfiguration(tableName, slaveIps, masterPorts);
+        SlaveReplicationService.RuntimeSlaveReplicationConfiguration replicationConf =
+                new SlaveReplicationService.RuntimeSlaveReplicationConfiguration(tableName, slaveIps, masterPorts);
         Assert.assertTrue(slaveReplicationService.tryAdd(replicationConf));
 
         // Wait for slave to commit

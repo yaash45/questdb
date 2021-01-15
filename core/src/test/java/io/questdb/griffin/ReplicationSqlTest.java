@@ -24,38 +24,46 @@
 
 package io.questdb.griffin;
 
-import io.questdb.StatelessGriffinTest;
 import io.questdb.griffin.engine.functions.rnd.SharedRandom;
 import io.questdb.std.Rnd;
+import io.questdb.test.tools.TestUtils;
 import org.jetbrains.annotations.NotNull;
 import org.junit.*;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
 
 import static io.questdb.griffin.CompiledQuery.REPLICATE;
 
-public class ReplicationSqlTest extends AbstractGriffinTest {
-    private static StatelessGriffinTest masterSetup = new StatelessGriffinTest();
-    private static StatelessGriffinTest.StaticState masterState;
+public class ReplicationSqlTest {
+    private static CairoTestServerState master;
+    private static CairoTestServerState slave;
 
     @BeforeClass
-    public static void startSlaveEngine() throws IOException {
-        masterState = StatelessGriffinTest.setUpClass("dbMasterRoot");
-    }
+    public static void startSlaveEngine() throws SqlException, IOException {
+        TemporaryFolder temp = new TemporaryFolder();
+        temp.create();
 
-    @Before
-    public void setUp0() {
-        masterSetup.setUp(masterState);
+        master = new EngineTestBuilder()
+                .withTempFolder(new TemporaryFolder(temp.newFolder("master")))
+                .withMasterReplication()
+                .build();
+        slave = new EngineTestBuilder()
+                .withTempFolder(new TemporaryFolder(temp.newFolder("slave")))
+                .withSlaveReplication()
+                .build();
     }
 
     @After
-    public void cleanupSlaveEngine() {
-        masterSetup.after(masterState);
+    public void setUp0() {
+        master.cleanUpData();
+        slave.cleanUpData();
     }
 
     @AfterClass
     public static void afterClass() {
-        StatelessGriffinTest.afterClass(masterState);
+        master.close();
+        slave.close();
     }
 
     @Before
@@ -71,6 +79,25 @@ public class ReplicationSqlTest extends AbstractGriffinTest {
                     Assert.assertEquals(REPLICATE, runSlaveSql("replicate table \"x\" from \"LON\"").getType());
                 }
         );
+    }
+
+    private void assertMemoryLeak(TestUtils.LeakProneCode code) throws Exception {
+        TestUtils.assertMemoryLeak(() -> {
+            try {
+                code.run();
+                master.getEngine().releaseInactive();
+                slave.getEngine().releaseInactive();
+                Assert.assertEquals(0, master.getEngine().getBusyWriterCount());
+                Assert.assertEquals(0, master.getEngine().getBusyReaderCount());
+                Assert.assertEquals(0, slave.getEngine().getBusyWriterCount());
+                Assert.assertEquals(0, slave.getEngine().getBusyReaderCount());
+            } finally {
+                master.getEngine().releaseAllReaders();
+                master.getEngine().releaseAllWriters();
+                slave.getEngine().releaseAllReaders();
+                slave.getEngine().releaseAllWriters();
+            }
+        });
     }
 
     private void createX() throws SqlException {
@@ -99,10 +126,10 @@ public class ReplicationSqlTest extends AbstractGriffinTest {
     }
 
     private @NotNull CompiledQuery runMasterSql(String sql) throws SqlException {
-        return compiler.compile(sql, sqlExecutionContext);
+        return master.compile(sql);
     }
 
     private @NotNull CompiledQuery runSlaveSql(String sql) throws SqlException {
-        return masterState.compiler.compile(sql, masterState.sqlExecutionContext);
+        return slave.compile(sql);
     }
 }

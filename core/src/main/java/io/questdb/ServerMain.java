@@ -27,6 +27,7 @@ package io.questdb;
 import io.questdb.cairo.CairoEngine;
 import io.questdb.cairo.replication.MasterReplicationConfiguration;
 import io.questdb.cairo.replication.MasterReplicationService;
+import io.questdb.cairo.replication.SlaveReplicationService;
 import io.questdb.cutlass.http.HttpServer;
 import io.questdb.cutlass.json.JsonException;
 import io.questdb.cutlass.line.tcp.LineTcpServer;
@@ -200,6 +201,15 @@ public class ServerMain {
                         cairoEngine,
                         configuration.getMasterReplicationConfiguration(),
                         workerPool
+                ));
+            }
+
+            if (configuration.getSlaveReplicationConfiguration().isEnabled()) {
+                instancesToClean.add(new SlaveReplicationService(
+                        configuration.getCairoConfiguration(),
+                        cairoEngine,
+                        workerPool,
+                        configuration.getSlaveReplicationConfiguration()
                 ));
             }
 
