@@ -1283,6 +1283,8 @@ public class SqlCompiler implements Closeable {
                 final RenameTableModel rtm = (RenameTableModel) executionModel;
                 engine.rename(executionContext.getCairoSecurityContext(), path, GenericLexer.unquote(rtm.getFrom().token), renamePath, GenericLexer.unquote(rtm.getTo().token));
                 return compiledQuery.ofRenameTable();
+            case ExecutionModel.REPLICATE:
+                return executeReplicate(executionContext, (ReplicateModel) executionModel);
             default:
                 InsertModel insertModel = (InsertModel) executionModel;
                 if (insertModel.getQueryModel() != null) {
@@ -1296,7 +1298,6 @@ public class SqlCompiler implements Closeable {
                 return insert(executionModel, executionContext);
         }
     }
-
     private void copyOrdered(TableWriter writer, RecordCursor cursor, RecordToRowCopier copier, int cursorTimestampIndex) {
         final Record record = cursor.getRecord();
         while (cursor.hasNext()) {
@@ -1498,6 +1499,11 @@ public class SqlCompiler implements Closeable {
         }
         copyTable(executionContext, executionModel);
         return compiledQuery.ofCopyLocal();
+    }
+
+    @NotNull
+    private CompiledQuery executeReplicate(SqlExecutionContext executionContext, ReplicateModel executionModel) throws SqlException {
+        return compiledQuery.ofReplicate();
     }
 
     private CompiledQuery executeWithRetries(

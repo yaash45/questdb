@@ -1,6 +1,7 @@
 package io.questdb.cairo.replication;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -22,7 +23,7 @@ import io.questdb.std.Unsafe;
 import io.questdb.std.str.DirectCharSequence;
 import io.questdb.std.str.Path;
 
-public class SlaveReplicationService {
+public class SlaveReplicationService implements Closeable {
     private static final Log LOG = LogFactory.getLog(SlaveReplicationService.class);
     private static final AtomicLong NEXT_PEER_ID = new AtomicLong();
     private static final UUID VM_UUID = UUID.randomUUID();
@@ -34,16 +35,19 @@ public class SlaveReplicationService {
     private final ReplicationSlaveConnectionMultiplexer slaveConnectionMux;
     private final SequencedQueue<SlaveReplicationInstructionEvent> instructionQueue;
 
-    public SlaveReplicationService(CairoConfiguration configuration, NetworkFacade nf, CairoEngine engine, WorkerPool workerPool) {
+    public SlaveReplicationService(
+            CairoConfiguration configuration,
+            CairoEngine engine,
+            WorkerPool workerPool,
+            SlaveReplicationConfiguration slaveConfig) {
         this.configuration = configuration;
-        this.nf = nf;
+        this.nf = slaveConfig.getNetworkFacade();
         this.ff = configuration.getFilesFacade();
         this.root = configuration.getRoot();
         this.engine = engine;
-        // TODO: Dynamic configuration
-        int instructionQueueLen = 2;
-        int connectionCallbackQueueLen = 8;
-        int newConnectionQueueLen = 2;
+        int instructionQueueLen = slaveConfig.getInstructionQueueLen();
+        int connectionCallbackQueueLen = slaveConfig.getConnectionCallbackQueueLen();
+        int newConnectionQueueLen = slaveConfig.getNewConnectionQueueLen();
         ReplicationSlaveControllerJob job = new ReplicationSlaveControllerJob();
         slaveConnectionMux = new ReplicationSlaveConnectionMultiplexer(nf, workerPool, connectionCallbackQueueLen, newConnectionQueueLen, job::handleReplicatingPeerDiconnection);
         workerPool.assign(job);
@@ -51,7 +55,12 @@ public class SlaveReplicationService {
         instructionQueue = SequencedQueue.createMultipleProducerSingleConsumerQueue(instructionQueueLen, SlaveReplicationInstructionEvent::new);
     }
 
-    public boolean tryAdd(SlaveReplicationConfiguration replicationConf) {
+    @Override
+    public void close() {
+        // TODO close allocations
+    }
+
+    public boolean tryAdd(RuntimeSlaveReplicationConfiguration replicationConf) {
         long seq;
         do {
             seq = instructionQueue.getProducerSeq().next();
@@ -85,12 +94,12 @@ public class SlaveReplicationService {
         return false;
     }
 
-    public static class SlaveReplicationConfiguration {
+    public static class RuntimeSlaveReplicationConfiguration {
         private CharSequence tableName;
         private ObjList<CharSequence> masterIps;
         private IntList masterPorts;
 
-        public SlaveReplicationConfiguration(CharSequence tableName, ObjList<CharSequence> masterIps, IntList masterPorts) {
+        public RuntimeSlaveReplicationConfiguration(CharSequence tableName, ObjList<CharSequence> masterIps, IntList masterPorts) {
             super();
             this.tableName = tableName;
             this.masterIps = masterIps;
@@ -102,10 +111,10 @@ public class SlaveReplicationService {
         private static final byte ADD_EVENT_TYPE = 1;
         private static final byte REMOVE_EVENT_TYPE = 2;
         private byte eventType;
-        private SlaveReplicationConfiguration replicationConf;
+        private RuntimeSlaveReplicationConfiguration replicationConf;
         private CharSequence tableName;
 
-        private void assignAddEvent(SlaveReplicationConfiguration replicationConf) {
+        private void assignAddEvent(RuntimeSlaveReplicationConfiguration replicationConf) {
             eventType = ADD_EVENT_TYPE;
             this.replicationConf = replicationConf;
         }
@@ -150,7 +159,7 @@ public class SlaveReplicationService {
                         SlaveReplicationInstructionEvent event = instructionQueue.getEvent(seq);
                         switch (event.eventType) {
                             case SlaveReplicationInstructionEvent.ADD_EVENT_TYPE: {
-                                SlaveReplicationConfiguration addReplicationConf = event.replicationConf;
+                                RuntimeSlaveReplicationConfiguration addReplicationConf = event.replicationConf;
                                 if (!replicatedTableNames.contains(addReplicationConf.tableName)) {
                                     SlaveReplicationHandler handler = new SlaveReplicationHandler(configuration);
                                     handler.of(addReplicationConf);
@@ -248,7 +257,7 @@ public class SlaveReplicationService {
         private class SlaveReplicationHandler implements Closeable {
             private final SlaveWriterImpl slaveWriter;
             private ObjList<InitialSlaveConnection> connections = new ObjList<>();
-            private SlaveReplicationConfiguration replicationConf;
+            private RuntimeSlaveReplicationConfiguration replicationConf;
             private long peerId;
             private int nReady;
             private TableWriter writer;
@@ -263,7 +272,7 @@ public class SlaveReplicationService {
                 slaveWriter = new SlaveWriterImpl(configuration);
             }
 
-            SlaveReplicationHandler of(SlaveReplicationConfiguration replicationConf) {
+            SlaveReplicationHandler of(RuntimeSlaveReplicationConfiguration replicationConf) {
                 this.replicationConf = replicationConf;
                 peerId = NEXT_PEER_ID.incrementAndGet();
                 nReady = 0;

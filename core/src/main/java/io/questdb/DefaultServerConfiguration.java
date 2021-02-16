@@ -26,6 +26,10 @@ package io.questdb;
 
 import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.DefaultCairoConfiguration;
+import io.questdb.cairo.replication.DefaultMasterReplicationConfiguration;
+import io.questdb.cairo.replication.DefaultSlaveReplicationConfiguration;
+import io.questdb.cairo.replication.MasterReplicationConfiguration;
+import io.questdb.cairo.replication.SlaveReplicationConfiguration;
 import io.questdb.cutlass.http.DefaultHttpServerConfiguration;
 import io.questdb.cutlass.http.HttpMinServerConfiguration;
 import io.questdb.cutlass.http.HttpServerConfiguration;
@@ -43,6 +47,8 @@ public class DefaultServerConfiguration implements ServerConfiguration {
     private final DefaultLineUdpReceiverConfiguration lineUdpReceiverConfiguration = new DefaultLineUdpReceiverConfiguration();
     private final DefaultLineTcpReceiverConfiguration lineTcpReceiverConfiguration = new DefaultLineTcpReceiverConfiguration();
     private final DefaultPGWireConfiguration pgWireConfiguration = new DefaultPGWireConfiguration();
+    private final MasterReplicationConfiguration masterReplicationConfiguration = new DefaultMasterReplicationConfiguration();
+    private final SlaveReplicationConfiguration slaveReplicationConfiguration = new DefaultSlaveReplicationConfiguration();
 
     public DefaultServerConfiguration(CharSequence root) {
         this.cairoConfiguration = new DefaultCairoConfiguration(root);
@@ -71,6 +77,16 @@ public class DefaultServerConfiguration implements ServerConfiguration {
     @Override
     public LineTcpReceiverConfiguration getLineTcpReceiverConfiguration() {
         return lineTcpReceiverConfiguration;
+    }
+
+    @Override
+    public MasterReplicationConfiguration getMasterReplicationConfiguration() {
+        return masterReplicationConfiguration;
+    }
+
+    @Override
+    public SlaveReplicationConfiguration getSlaveReplicationConfiguration() {
+        return slaveReplicationConfiguration;
     }
 
     @Override
