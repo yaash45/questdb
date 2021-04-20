@@ -215,6 +215,7 @@ public class AbstractGriffinTest extends AbstractCairoTest {
             int expectedRow = 0;
             while (cursor.hasNext()) {
                 for (int col = 0, n = metadata.getColumnCount(); col < n; col++) {
+                    String message = "Row: " + expectedRow + ", col: " + col;
                     switch (metadata.getColumnType(col)) {
                         case ColumnType.BOOLEAN:
                             Assert.assertEquals(expected[expectedRow].getBool(col), record.getBool(col));
@@ -241,10 +242,10 @@ public class AbstractGriffinTest extends AbstractCairoTest {
                             Assert.assertEquals(expected[expectedRow].getTimestamp(col), record.getTimestamp(col));
                             break;
                         case ColumnType.FLOAT:
-                            Assert.assertTrue(doubleEquals(expected[expectedRow].getFloat(col), record.getFloat(col)));
+                            Assert.assertEquals(message, expected[expectedRow].getFloat(col), record.getFloat(col), EPSILON);
                             break;
                         case ColumnType.DOUBLE:
-                            Assert.assertTrue(doubleEquals(expected[expectedRow].getDouble(col), record.getDouble(col)));
+                            Assert.assertEquals(message, expected[expectedRow].getDouble(col), record.getDouble(col), EPSILON);
                             break;
                         case ColumnType.STRING:
                             TestUtils.assertEquals(expected[expectedRow].getStr(col), record.getStr(col));

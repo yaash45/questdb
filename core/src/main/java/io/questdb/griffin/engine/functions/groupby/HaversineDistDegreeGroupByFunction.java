@@ -88,6 +88,9 @@ public class HaversineDistDegreeGroupByFunction extends DoubleFunction implement
         double interpolatedBoundaryDistance = (boundaryLength * distance) / (ts2 - ts1);
         //save
         MapValue result = isEndOfBoundary ? value1 : value2;
+        if (Math.abs(distance + interpolatedBoundaryDistance + 3.906126146242618E-6) < 1E-12) {
+            int i = 0;
+        }
         saveDistance(interpolatedBoundaryDistance, result, getDistance(result));
     }
 
@@ -235,6 +238,9 @@ public class HaversineDistDegreeGroupByFunction extends DoubleFunction implement
     }
 
     private void saveDistance(MapValue result, double distance) {
+        if (Math.abs(distance + 3.906126146242618E-6) < 1E-12) {
+            int i = 0;
+        }
         result.putDouble(this.valueIndex + 6, distance);
     }
 
@@ -247,6 +253,9 @@ public class HaversineDistDegreeGroupByFunction extends DoubleFunction implement
     private void saveLastItem(MapValue mapValue, double lat, double lon, long timestamp) {
         mapValue.putDouble(this.valueIndex + 3, lat);
         mapValue.putDouble(this.valueIndex + 4, lon);
+        if (timestamp == -9223372036854775797L) {
+            int i = 0;
+        }
         mapValue.putTimestamp(this.valueIndex + 5, timestamp);
     }
 }
