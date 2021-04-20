@@ -386,6 +386,9 @@ public class SampleByInterpolateRecordCursorFactory implements RecordCursorFacto
                                 // and calculate interpolated value all the way to 'hiSample'
 
                                 long x1 = sampler.previousTimestamp(prevSample);
+                                if (x1 == 201600000000L && loSample == 172800000000L) {
+                                    int i = 0;
+                                }
 
                                 if (x1 < loSample) {
                                     // not enough data points
