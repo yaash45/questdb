@@ -216,11 +216,13 @@ public class SampleByInterpolateRecordCursorFactory implements RecordCursorFacto
             // main data map.
             //
             // At the same time check if cursor has data
+            int cycle = 0;
             while (baseCursor.hasNext()) {
                 interruptor.checkInterrupted();
                 final MapKey key = recordKeyMap.withKey();
                 mapSink.copy(baseRecord, key);
                 key.createValue();
+                cycle++;
             }
 
             // no data, nothing to do
@@ -247,6 +249,7 @@ public class SampleByInterpolateRecordCursorFactory implements RecordCursorFacto
             long hiSample;
 
             do {
+                cycle++;
                 // this seems inefficient, but we only double-sample
                 // very first record and nothing else
                 long sample = sampler.round(baseRecord.getTimestamp(timestampIndex));
@@ -292,6 +295,7 @@ public class SampleByInterpolateRecordCursorFactory implements RecordCursorFacto
                 final RecordCursor mapCursor = recordKeyMap.getCursor();
                 final Record mapRecord = mapCursor.getRecord();
                 while (mapCursor.hasNext()) {
+                    cycle++;
                     MapValue value = findDataMapValue(mapRecord, loSample);
                     if (value.getByte(0) == 0) { //we have at least 1 data point
                         long x1 = loSample;
@@ -316,17 +320,22 @@ public class SampleByInterpolateRecordCursorFactory implements RecordCursorFacto
             // find gaps by checking each of the unique keys against every sample
             long sample;
             for (sample = prevSample = loSample; sample < hiSample; prevSample = sample, sample = sampler.nextTimestamp(sample)) {
+                cycle++;
                 final RecordCursor mapCursor = recordKeyMap.getCursor();
                 final Record mapRecord = mapCursor.getRecord();
                 while (mapCursor.hasNext()) {
+                    cycle++;
                     // locate first gap
                     MapValue value = findDataMapValue(mapRecord, sample);
                     if (value.getByte(0) == 1) {
                         // gap is at 'sample', so potential X-value is at 'prevSample'
                         // now we need to find Y-value
                         long current = sample;
-
                         while (true) {
+                            cycle++;
+                            if (cycle == 540) {
+                                int i = 0;
+                            }
                             // to timestamp after 'sample' to begin with
                             long x2 = sampler.nextTimestamp(current);
                             // is this timestamp within range?
@@ -393,8 +402,8 @@ public class SampleByInterpolateRecordCursorFactory implements RecordCursorFacto
                                     nullifyRange(sample, hiSample, mapRecord);
                                 } else {
                                     MapValue x1Value = findDataMapValue2(mapRecord, x1);
-                                    if (x1 == 201600000000L && loSample == 172800000000L && x2 == 291600000000L && prevSample == 205200000000L
-                                            && Double.isNaN(x1Value.getDouble(1 + 3))) {
+                                    if (x1 == 201600000000L && loSample == 172800000000L && x2 == 291600000000L && prevSample == 205200000000L) {
+                                        double point = x1Value.getDouble(1 + 3);
                                         int i = 0;
                                     }
 

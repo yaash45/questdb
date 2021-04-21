@@ -242,7 +242,7 @@ public class HaversineDistDegreeGroupByFunction extends DoubleFunction implement
     }
 
     private void saveDistance(MapValue result, double distance) {
-        if (distance != distance) {
+        if (distance == 1111.9646253430044) {
             int i = 0;
         }
         result.putDouble(this.valueIndex + 6, distance);
