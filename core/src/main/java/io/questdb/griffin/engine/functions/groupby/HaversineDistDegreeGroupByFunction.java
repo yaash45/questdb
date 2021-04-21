@@ -181,7 +181,11 @@ public class HaversineDistDegreeGroupByFunction extends DoubleFunction implement
         double lat2Degrees = getFirstLatitude(value2);
         double lon2Degrees = getFirstLongitude(value2);
 
-        return calculateHaversineDistanceFromDegrees(lat1Degrees, lon1Degrees, lat2Degrees, lon2Degrees, 0);
+        double distance = calculateHaversineDistanceFromDegrees(lat1Degrees, lon1Degrees, lat2Degrees, lon2Degrees, 0);
+        if (distance != distance) {
+            int i = 0;
+        }
+        return distance;
     }
 
     private double calculateHaversineDistanceFromDegrees(double lat1Degrees, double lon1Degrees, double lat2Degrees, double lon2Degrees, double currentTotalDistance) {
@@ -238,7 +242,7 @@ public class HaversineDistDegreeGroupByFunction extends DoubleFunction implement
     }
 
     private void saveDistance(MapValue result, double distance) {
-        if (Math.abs(distance + 3.906126146242618E-6) < 1E-12) {
+        if (distance != distance) {
             int i = 0;
         }
         result.putDouble(this.valueIndex + 6, distance);

@@ -386,9 +386,6 @@ public class SampleByInterpolateRecordCursorFactory implements RecordCursorFacto
                                 // and calculate interpolated value all the way to 'hiSample'
 
                                 long x1 = sampler.previousTimestamp(prevSample);
-                                if (x1 == 201600000000L && loSample == 172800000000L) {
-                                    int i = 0;
-                                }
 
                                 if (x1 < loSample) {
                                     // not enough data points
@@ -396,6 +393,12 @@ public class SampleByInterpolateRecordCursorFactory implements RecordCursorFacto
                                     nullifyRange(sample, hiSample, mapRecord);
                                 } else {
                                     MapValue x1Value = findDataMapValue2(mapRecord, x1);
+                                    if (x1 == 201600000000L && loSample == 172800000000L && x2 == 291600000000L && prevSample == 205200000000L
+                                            && Double.isNaN(x1Value.getDouble(1 + 3))) {
+                                        int i = 0;
+                                    }
+
+
                                     MapValue x2value = findDataMapValue(mapRecord, prevSample);
                                     interpolate(sampler.nextTimestamp(prevSample), hiSample, mapRecord, x1, prevSample, x1Value, x2value);
                                 }
