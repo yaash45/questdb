@@ -50,7 +50,7 @@ import java.net.URL;
 public class AbstractO3Test {
     protected static final StringSink sink = new StringSink();
     protected static final StringSink sink2 = new StringSink();
-    private final static Log LOG = LogFactory.getLog(O3Test.class);
+    private final static Log LOG = LogFactory.getLog(AbstractO3Test.class);
     @ClassRule
     public static TemporaryFolder temp = new TemporaryFolder();
     protected static CharSequence root;
@@ -191,7 +191,7 @@ public class AbstractO3Test {
             String resourceName
     ) throws URISyntaxException, SqlException {
         AbstractO3Test.printSqlResult(compiler, sqlExecutionContext, sql);
-        URL url = O3Test.class.getResource(resourceName);
+        URL url = AbstractO3Test.class.getResource(resourceName);
         Assert.assertNotNull(url);
         TestUtils.assertEquals(new File(url.toURI()), sink);
     }
