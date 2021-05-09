@@ -28,47 +28,50 @@ import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.sql.Function;
 import io.questdb.cairo.sql.Record;
 import io.questdb.griffin.FunctionFactory;
+import io.questdb.griffin.SqlException;
 import io.questdb.griffin.SqlExecutionContext;
 import io.questdb.griffin.engine.functions.BooleanFunction;
 import io.questdb.griffin.engine.functions.UnaryFunction;
-import io.questdb.std.Chars;
 import io.questdb.std.ObjList;
 
-public class NotMatchCharFunctionFactory implements FunctionFactory {
+import java.util.regex.Matcher;
+
+public class NotMatchStrStrFunctionFactory implements FunctionFactory {
     @Override
     public String getSignature() {
-        return "!~(Sa)";
+        return "!~(Ss)";
     }
 
     @Override
-    public Function newInstance(ObjList<Function> args, int position, CairoConfiguration configuration, SqlExecutionContext sqlExecutionContext) {
-        return new MatchFunction(
-                position,
-                args.getQuick(0),
-                args.getQuick(1).getChar(null)
-        );
+    public Function newInstance(
+            ObjList<Function> args,
+            int position,
+            CairoConfiguration configuration,
+            SqlExecutionContext sqlExecutionContext
+    ) throws SqlException {
+        return RegexFunctionUtils.getRegexFunction(args, position, MatchFunction.CONSTRUCTOR);
     }
 
     private static class MatchFunction extends BooleanFunction implements UnaryFunction {
-        private final Function value;
-        private final char expected;
+        private final static RegexFunctionConstructor CONSTRUCTOR = MatchFunction::new;
+        private final Function arg;
+        private final Matcher matcher;
 
-        public MatchFunction(int position, Function value, char expected) {
+        public MatchFunction(int position, Function arg, Matcher matcher) {
             super(position);
-            this.value = value;
-            this.expected = expected;
+            this.arg = arg;
+            this.matcher = matcher;
+        }
+
+        @Override
+        public Function getArg() {
+            return arg;
         }
 
         @Override
         public boolean getBool(Record rec) {
             CharSequence cs = getArg().getStr(rec);
-            return cs != null && Chars.indexOf(cs, expected) == -1;
+            return cs == null || !matcher.reset(cs).find();
         }
-
-        @Override
-        public Function getArg() {
-            return value;
-        }
-
     }
 }

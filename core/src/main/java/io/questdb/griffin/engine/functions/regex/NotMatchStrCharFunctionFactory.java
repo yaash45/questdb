@@ -34,10 +34,10 @@ import io.questdb.griffin.engine.functions.UnaryFunction;
 import io.questdb.std.Chars;
 import io.questdb.std.ObjList;
 
-public class MatchCharFunctionFactory implements FunctionFactory {
+public class NotMatchStrCharFunctionFactory implements FunctionFactory {
     @Override
     public String getSignature() {
-        return "~(Sa)";
+        return "!~(Sa)";
     }
 
     @Override
@@ -62,12 +62,13 @@ public class MatchCharFunctionFactory implements FunctionFactory {
         @Override
         public boolean getBool(Record rec) {
             CharSequence cs = getArg().getStr(rec);
-            return cs != null && Chars.indexOf(cs, expected) != -1;
+            return cs != null && Chars.indexOf(cs, expected) == -1;
         }
 
         @Override
         public Function getArg() {
             return value;
         }
+
     }
 }

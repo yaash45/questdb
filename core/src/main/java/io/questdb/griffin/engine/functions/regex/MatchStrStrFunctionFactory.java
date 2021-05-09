@@ -32,37 +32,28 @@ import io.questdb.griffin.SqlException;
 import io.questdb.griffin.SqlExecutionContext;
 import io.questdb.griffin.engine.functions.BooleanFunction;
 import io.questdb.griffin.engine.functions.UnaryFunction;
-import io.questdb.std.Chars;
 import io.questdb.std.ObjList;
 
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
-public class MatchStrFunctionFactory implements FunctionFactory {
+public class MatchStrStrFunctionFactory implements FunctionFactory {
     @Override
     public String getSignature() {
         return "~(Ss)";
     }
 
     @Override
-    public Function newInstance(ObjList<Function> args, int position, CairoConfiguration configuration, SqlExecutionContext sqlExecutionContext) throws SqlException {
-        Function value = args.getQuick(0);
-        CharSequence regex = args.getQuick(1).getStr(null);
-
-        if (regex == null) {
-            throw SqlException.$(args.getQuick(1).getPosition(), "NULL regex");
-        }
-
-        try {
-            Matcher matcher = Pattern.compile(Chars.toString(regex)).matcher("");
-            return new MatchFunction(position, value, matcher);
-        } catch (PatternSyntaxException e) {
-            throw SqlException.$(args.getQuick(1).getPosition() + e.getIndex() + 1, e.getMessage());
-        }
+    public Function newInstance(
+            ObjList<Function> args,
+            int position,
+            CairoConfiguration configuration,
+            SqlExecutionContext sqlExecutionContext
+    ) throws SqlException {
+        return RegexFunctionUtils.getRegexFunction(args, position, MatchFunction.CONSTRUCTOR);
     }
 
     private static class MatchFunction extends BooleanFunction implements UnaryFunction {
+        private final static RegexFunctionConstructor CONSTRUCTOR = MatchFunction::new;
         private final Function value;
         private final Matcher matcher;
 
@@ -73,14 +64,14 @@ public class MatchStrFunctionFactory implements FunctionFactory {
         }
 
         @Override
-        public boolean getBool(Record rec) {
-            CharSequence cs = getArg().getStr(rec);
-            return cs != null && matcher.reset(cs).find();
+        public Function getArg() {
+            return value;
         }
 
         @Override
-        public Function getArg() {
-            return value;
+        public boolean getBool(Record rec) {
+            final CharSequence cs = getArg().getStr(rec);
+            return cs != null && matcher.reset(cs).find();
         }
     }
 }

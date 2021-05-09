@@ -35,7 +35,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-public class NotMatchStrFunctionFactoryTest extends AbstractGriffinTest {
+public class NotMatchStrStrFunctionFactoryTest extends AbstractGriffinTest {
 
     @Before
     public void setUp3() {

@@ -23,6 +23,7 @@
  ******************************************************************************/
 
 import io.questdb.griffin.FunctionFactory;
+import io.questdb.griffin.engine.functions.regex.*;
 
 open module io.questdb {
     requires transitive jdk.unsupported;
@@ -155,16 +156,18 @@ open module io.questdb {
             io.questdb.griffin.engine.functions.math.AbsShortFunctionFactory,
             io.questdb.griffin.engine.functions.math.AbsLongFunctionFactory,
             io.questdb.griffin.engine.functions.math.AbsDoubleFunctionFactory,
-//                    # '~=',
-            io.questdb.griffin.engine.functions.regex.MatchStrFunctionFactory,
-            io.questdb.griffin.engine.functions.regex.MatchCharFunctionFactory,
+//                    # '~',
+            MatchStrStrFunctionFactory,
+            MatchStrCharFunctionFactory,
+            MatchSymStrFunctionFactory,
+            MatchSymCharFunctionFactory,
 //                    #like
             io.questdb.griffin.engine.functions.regex.LikeCharFunctionFactory,
             io.questdb.griffin.engine.functions.regex.LikeStrFunctionFactory,
             io.questdb.griffin.engine.functions.regex.ILikeStrFunctionFactory,
 //                    # '!~',
-            io.questdb.griffin.engine.functions.regex.NotMatchStrFunctionFactory,
-            io.questdb.griffin.engine.functions.regex.NotMatchCharFunctionFactory,
+            NotMatchStrStrFunctionFactory,
+            NotMatchStrCharFunctionFactory,
 //                    # 'to_char',
             io.questdb.griffin.engine.functions.date.ToStrDateFunctionFactory,
             io.questdb.griffin.engine.functions.date.ToStrTimestampFunctionFactory,

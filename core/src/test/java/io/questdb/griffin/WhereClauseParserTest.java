@@ -363,6 +363,95 @@ public class WhereClauseParserTest extends AbstractCairoTest {
     }
 
     @Test
+    public void testSimpleRegex() throws Exception {
+        IntrinsicModel m = modelOf("sym ~ 'abc'");
+        Assert.assertEquals(IntrinsicModel.UNDEFINED, m.intrinsicValue);
+        Assert.assertEquals("[]", m.keyValues.toString());
+        Assert.assertEquals("[4]", m.keyValuePositions.toString());
+        TestUtils.assertEquals("'abc'", m.keyRegex.token);
+    }
+
+    @Test
+    public void testRegexOverIn() throws Exception {
+        IntrinsicModel m = modelOf("sym ~ 'abc' and sym in ('a')");
+        Assert.assertEquals(IntrinsicModel.UNDEFINED, m.intrinsicValue);
+        Assert.assertEquals("[]", m.keyValues.toString());
+        Assert.assertEquals("[4]", m.keyValuePositions.toString());
+        TestUtils.assertEquals("'abc'", m.keyRegex.token);
+        TestUtils.assertEquals("'a'symin", toRpn(m.filter));
+    }
+
+    @Test
+    public void testLambdaOverRegex() throws Exception {
+        IntrinsicModel m = modelOf("sym ~ 'abc' and sym in (select a from xyz)");
+        Assert.assertEquals(IntrinsicModel.UNDEFINED, m.intrinsicValue);
+        Assert.assertEquals("[]", m.keyValues.toString());
+        Assert.assertEquals("[20]", m.keyValuePositions.toString());
+        Assert.assertNull(m.keyRegex);
+        TestUtils.assertEquals("'abc'sym~", toRpn(m.filter));
+    }
+
+    @Test
+    public void testLambdaOverRegexR() throws Exception {
+        IntrinsicModel m = modelOf("sym in (select a from xyz) and sym ~ 'abc'");
+        Assert.assertEquals(IntrinsicModel.UNDEFINED, m.intrinsicValue);
+        Assert.assertEquals("[]", m.keyValues.toString());
+        Assert.assertEquals("[4]", m.keyValuePositions.toString());
+        Assert.assertNull(m.keyRegex);
+        TestUtils.assertEquals("'abc'sym~", toRpn(m.filter));
+    }
+
+    @Test
+    public void testRegexOverInR() throws Exception {
+        IntrinsicModel m = modelOf("sym in ('a') and sym ~ 'abc'");
+        Assert.assertEquals(IntrinsicModel.UNDEFINED, m.intrinsicValue);
+        Assert.assertEquals("[]", m.keyValues.toString());
+        Assert.assertEquals("[21]", m.keyValuePositions.toString());
+        TestUtils.assertEquals("'abc'", m.keyRegex.token);
+        TestUtils.assertEquals("'a'symin", toRpn(m.filter));
+    }
+
+    @Test
+    public void testRegexOverNotEq() throws Exception {
+        IntrinsicModel m = modelOf("sym <> 'a' and sym ~ 'abc'");
+        Assert.assertEquals(IntrinsicModel.UNDEFINED, m.intrinsicValue);
+        Assert.assertEquals("[]", m.keyValues.toString());
+        Assert.assertEquals("[19]", m.keyValuePositions.toString());
+        TestUtils.assertEquals("'abc'", m.keyRegex.token);
+        TestUtils.assertEquals("'a'sym<>", toRpn(m.filter));
+    }
+
+    @Test
+    public void testRegexOverNotEqR() throws Exception {
+        IntrinsicModel m = modelOf("sym ~ 'abc' and sym <> 'a'");
+        Assert.assertEquals(IntrinsicModel.UNDEFINED, m.intrinsicValue);
+        Assert.assertEquals("[]", m.keyValues.toString());
+        Assert.assertEquals("[4]", m.keyValuePositions.toString());
+        TestUtils.assertEquals("'abc'", m.keyRegex.token);
+        TestUtils.assertEquals("'a'sym<>", toRpn(m.filter));
+    }
+
+    @Test
+    public void testRegexOverEq() throws Exception {
+        IntrinsicModel m = modelOf("sym = 'a' and sym ~ 'abc'");
+        Assert.assertEquals(IntrinsicModel.UNDEFINED, m.intrinsicValue);
+        Assert.assertEquals("[]", m.keyValues.toString());
+        Assert.assertEquals("[18]", m.keyValuePositions.toString());
+        TestUtils.assertEquals("'abc'", m.keyRegex.token);
+        TestUtils.assertEquals("'a'sym=", toRpn(m.filter));
+    }
+
+    @Test
+    public void testRegexOverEqR() throws Exception {
+        IntrinsicModel m = modelOf("sym ~ 'abc' and sym = 'a'");
+        Assert.assertEquals(IntrinsicModel.UNDEFINED, m.intrinsicValue);
+        Assert.assertEquals("[]", m.keyValues.toString());
+        Assert.assertEquals("[4]", m.keyValuePositions.toString());
+        TestUtils.assertEquals("'abc'", m.keyRegex.token);
+        TestUtils.assertEquals("'a'sym=", toRpn(m.filter));
+    }
+
+    @Test
     public void testContradictingNullSearch10() throws Exception {
         IntrinsicModel m = modelOf("sym = null and sym != null and ex = 'blah'");
         Assert.assertEquals(IntrinsicModel.FALSE, m.intrinsicValue);

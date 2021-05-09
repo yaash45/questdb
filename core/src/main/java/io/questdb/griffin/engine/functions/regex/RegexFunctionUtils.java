@@ -24,30 +24,24 @@
 
 package io.questdb.griffin.engine.functions.regex;
 
-import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.sql.Function;
-import io.questdb.cairo.sql.Record;
-import io.questdb.griffin.FunctionFactory;
 import io.questdb.griffin.SqlException;
-import io.questdb.griffin.SqlExecutionContext;
-import io.questdb.griffin.engine.functions.BooleanFunction;
-import io.questdb.griffin.engine.functions.UnaryFunction;
 import io.questdb.std.Chars;
 import io.questdb.std.ObjList;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-public class NotMatchStrFunctionFactory implements FunctionFactory {
-    @Override
-    public String getSignature() {
-        return "!~(Ss)";
-    }
-
-    @Override
-    public Function newInstance(ObjList<Function> args, int position, CairoConfiguration configuration, SqlExecutionContext sqlExecutionContext) throws SqlException {
-        Function value = args.getQuick(0);
+public class RegexFunctionUtils {
+    @NotNull
+    static Function getRegexFunction(
+            ObjList<Function> args,
+            int position,
+            RegexFunctionConstructor constructor
+    ) throws SqlException {
+        final Function value = args.getQuick(0);
         CharSequence regex = args.getQuick(1).getStr(null);
 
         if (regex == null) {
@@ -55,32 +49,10 @@ public class NotMatchStrFunctionFactory implements FunctionFactory {
         }
 
         try {
-            Matcher matcher = Pattern.compile(Chars.toString(regex)).matcher("");
-            return new MatchFunction(position, value, matcher);
+            final Matcher matcher = Pattern.compile(Chars.toString(regex)).matcher("");
+            return constructor.newInstance(position, value, matcher);
         } catch (PatternSyntaxException e) {
             throw SqlException.$(args.getQuick(1).getPosition() + e.getIndex() + 1, e.getMessage());
-        }
-    }
-
-    private static class MatchFunction extends BooleanFunction implements UnaryFunction {
-        private final Function arg;
-        private final Matcher matcher;
-
-        public MatchFunction(int position, Function arg, Matcher matcher) {
-            super(position);
-            this.arg = arg;
-            this.matcher = matcher;
-        }
-
-        @Override
-        public Function getArg() {
-            return arg;
-        }
-
-        @Override
-        public boolean getBool(Record rec) {
-            CharSequence cs = getArg().getStr(rec);
-            return cs == null || !matcher.reset(cs).find();
         }
     }
 }

@@ -44,6 +44,7 @@ public class IntrinsicModel implements Mutable {
     public ExpressionNode filter;
     public int intrinsicValue = UNDEFINED;
     public QueryModel keySubQuery;
+    public ExpressionNode keyRegex;
     private final RuntimeIntervalModelBuilder runtimeIntervalBuilder = new RuntimeIntervalModelBuilder();
 
     @Override
@@ -57,6 +58,7 @@ public class IntrinsicModel implements Mutable {
         filter = null;
         intrinsicValue = UNDEFINED;
         keySubQuery = null;
+        keyRegex = null;
     }
 
     public void excludeValue(ExpressionNode val) {

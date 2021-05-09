@@ -78,12 +78,12 @@ io.questdb.griffin.engine.functions.math.AbsLongFunctionFactory
 io.questdb.griffin.engine.functions.math.AbsDoubleFunctionFactory
 
 # '~='
-io.questdb.griffin.engine.functions.regex.MatchStrFunctionFactory
-io.questdb.griffin.engine.functions.regex.MatchCharFunctionFactory
+io.questdb.griffin.engine.functions.regex.MatchStrStrFunctionFactory
+io.questdb.griffin.engine.functions.regex.MatchStrCharFunctionFactory
 
 # '!~'
-io.questdb.griffin.engine.functions.regex.NotMatchStrFunctionFactory
-io.questdb.griffin.engine.functions.regex.NotMatchCharFunctionFactory
+io.questdb.griffin.engine.functions.regex.NotMatchStrStrFunctionFactory
+io.questdb.griffin.engine.functions.regex.NotMatchStrCharFunctionFactory
 
 #  like
 io.questdb.griffin.engine.functions.regex.LikeStrFunctionFactory
