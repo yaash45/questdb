@@ -409,7 +409,7 @@ public class MasterReplicationService implements Closeable {
                             frame = null;
                         }
 
-                        reader.readTxn();
+                        reader.readTxnSlow();
                         if (reader.size() > nRow) {
                             TableReplicationPageFrameCursor cursor = factory.getPageFrameCursorFrom(sqlExecutionContext, reader.getMetadata().getTimestampIndex(), nRow);
                             nRow += cursor.size();

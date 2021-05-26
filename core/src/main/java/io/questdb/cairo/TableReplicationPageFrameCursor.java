@@ -67,9 +67,10 @@ public class TableReplicationPageFrameCursor implements PageFrameCursor {
         this.columnSizes = columnSizes;
         columnCount = columnIndexes.size();
         this.timestampColumnIndex = timestampColumnIndex;
-        columnFrameAddresses.ensureCapacity(columnCount);
-        columnFrameLengths.ensureCapacity(columnCount);
-        columnFrameOffsets.ensureCapacity(columnCount);
+        columnFrameAddresses.seed(columnCount, 0);
+        columnFrameLengths.seed(columnCount, 0);
+        columnFrameOffsets.seed(columnCount, 0);
+        columnTops.seed(columnCount, 0);
         columnTops.ensureCapacity(columnCount);
         toTop();
         return this;

@@ -80,6 +80,7 @@ public final class Net {
     public static long accept(long fd) {
         long acceptedFd = accept0(fd);
         if (acceptedFd != -1L) {
+            assert Files.auditOpen(acceptedFd);
             Files.bumpFileCount();
         }
         return acceptedFd;
@@ -218,6 +219,7 @@ public final class Net {
     public static long socketTcp(boolean blocking) {
         final long fd = socketTcp0(blocking);
         if (fd != -1L) {
+            assert Files.auditOpen(fd);
             Files.bumpFileCount();
         }
         return fd;
@@ -226,6 +228,7 @@ public final class Net {
     public static long socketUdp() {
         long fd = socketUdp0();
         if (fd != -1L) {
+            assert Files.auditOpen(fd);
             Files.bumpFileCount();
         }
         return fd;

@@ -24,6 +24,7 @@
 
 package io.questdb.cairo;
 
+import java.util.Arrays;
 import io.questdb.MessageBus;
 import io.questdb.cairo.sql.RecordMetadata;
 import io.questdb.log.Log;
@@ -284,7 +285,7 @@ public class TableBlockWriter implements Closeable {
         }
 
         private void clear() {
-            // No need
+            Arrays.fill(mappingData, 0);
         }
 
         private long getAdditionalMappingSize(int nMapping) {
