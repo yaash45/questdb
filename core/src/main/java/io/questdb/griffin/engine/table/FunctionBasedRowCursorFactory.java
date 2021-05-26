@@ -22,12 +22,11 @@
  *
  ******************************************************************************/
 
-package io.questdb.griffin;
+package io.questdb.griffin.engine.table;
 
-public abstract class AbstractBooleanFunctionFactory {
-    protected boolean isNegated = false;
+import io.questdb.cairo.sql.Function;
+import io.questdb.cairo.sql.RowCursorFactory;
 
-    public void setNegated(boolean isNegated) {
-        this.isNegated = isNegated;
-    }
+public interface FunctionBasedRowCursorFactory extends RowCursorFactory {
+    Function getFunction();
 }

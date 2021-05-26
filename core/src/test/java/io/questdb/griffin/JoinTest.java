@@ -3522,6 +3522,67 @@ public class JoinTest extends AbstractGriffinTest {
     }
 
     @Test
+    public void testSelectAliasTest() throws Exception {
+        assertMemoryLeak(() -> {
+            compiler.compile("create table contact_events as (" +
+                    "  select rnd_symbol(4,4,4,2) _id, " +
+                    "    rnd_symbol(4,4,4,2) contactid, " +
+                    "    CAST(x as Timestamp) timestamp, " +
+                    "    rnd_symbol(4,4,4,2) groupId " +
+                    "  from long_sequence(50)) " +
+                    "timestamp(timestamp)", sqlExecutionContext);
+            compiler.compile("create table contacts as (" +
+                    "  select rnd_symbol(4,4,4,2) _id, " +
+                    "    CAST(x as Timestamp) timestamp, " +
+                    "    rnd_symbol(4,4,4,2) notRealType " +
+                    "  from long_sequence(50)) " +
+                    "timestamp(timestamp)", sqlExecutionContext);
+
+            assertQuery("id\n",
+                    "with\n" +
+                            "eventlist as (select * from contact_events latest by _id order by timestamp)\n" +
+                            ",contactlist as (select * from contacts latest by _id order by timestamp)\n" +
+                            ",c as (select distinct contactid from eventlist where groupId = 'ykom80aRN5AwUcuRp4LJ' except select distinct _id as contactId from contactlist where notRealType = 'bot')\n" +
+                            "select\n" +
+                            "c.contactId as id\n" +
+                            "from\n" +
+                            "c\n" +
+                            "join contactlist on c.contactid = contactlist._id\n",
+                    null, false, false, true);
+        });
+    }
+
+    @Test
+    public void testAsofJoin() throws Exception {
+        assertMemoryLeak(() -> {
+            compiler.compile("create table trips as (" +
+                    "  select rnd_double() fare_amount, " +
+                    "    CAST(x as Timestamp) pickup_datetime " +
+                    "  from long_sequence(5)) " +
+                    "timestamp(pickup_datetime)", sqlExecutionContext);
+
+            compiler.compile("create table weather as (" +
+                    "  select rnd_double() tempF, " +
+                    "    rnd_int() windDir, " +
+                    "    cast(x as TIMESTAMP) timestamp " +
+                    "  from long_sequence(5)) " +
+                    "timestamp(timestamp)", sqlExecutionContext);
+
+            assertQuery("pickup_datetime\tfare_amount\ttempF\twindDir\n" +
+                            "1970-01-01T00:00:00.000001Z\t0.6607777894187332\t0.6508594025855301\t-1436881714\n" +
+                            "1970-01-01T00:00:00.000002Z\t0.2246301342497259\t0.7905675319675964\t1545253512\n" +
+                            "1970-01-01T00:00:00.000003Z\t0.08486964232560668\t0.22452340856088226\t-409854405\n" +
+                            "1970-01-01T00:00:00.000004Z\t0.299199045961845\t0.3491070363730514\t1904508147\n" +
+                            "1970-01-01T00:00:00.000005Z\t0.20447441837877756\t0.7611029514995744\t1125579207\n",
+                    "SELECT pickup_datetime, fare_amount, tempF, windDir \n" +
+                            "FROM (trips WHERE pickup_datetime = '1970-01-01') \n" +
+                            "ASOF JOIN weather",
+                    "pickup_datetime", false, false, true);
+        });
+    }
+
+
+    @Test
     public void testTypeMismatchFF() throws Exception {
         testFullFat(this::testTypeMismatch);
     }

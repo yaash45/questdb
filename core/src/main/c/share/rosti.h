@@ -32,18 +32,8 @@
 #include "jni.h"
 #include "util.h"
 
-#ifdef __APPLE__
-
-#include <cmath>
-#define MIN fmin
-#define MAX fmax
-#else
 #define MIN std::min
 #define MAX std::max
-#endif
-
-
-
 
 #include "vcl/vectorclass.h"
 

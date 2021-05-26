@@ -348,7 +348,7 @@ public class FastMap implements Map {
         pointers.setPos(capacity);
         pointers.zero(-1);
 
-        for (int i = 0, k = this.offsets.size(); i < k; i++) {
+        for (long i = 0, k = this.offsets.size(); i < k; i++) {
             long offset = this.offsets.get(i);
             if (offset == -1) {
                 continue;
@@ -584,6 +584,37 @@ public class FastMap implements Map {
             appendAddress += 4;
             for (int i = lo; i < hi; i++) {
                 Unsafe.getUnsafe().putChar(appendAddress + ((i - lo) << 1), value.charAt(i));
+            }
+            appendAddress += len << 1;
+            writeOffset();
+        }
+
+        @Override
+        public void putStrLowerCase(CharSequence value) {
+            if (value == null) {
+                putNull();
+                return;
+            }
+
+            int len = value.length();
+            checkSize((len << 1) + 4);
+            Unsafe.getUnsafe().putInt(appendAddress, len);
+            appendAddress += 4;
+            for (int i = 0; i < len; i++) {
+                Unsafe.getUnsafe().putChar(appendAddress + (i << 1), Character.toLowerCase(value.charAt(i)));
+            }
+            appendAddress += len << 1;
+            writeOffset();
+        }
+
+        @Override
+        public void putStrLowerCase(CharSequence value, int lo, int hi) {
+            int len = hi - lo;
+            checkSize((len << 1) + 4);
+            Unsafe.getUnsafe().putInt(appendAddress, len);
+            appendAddress += 4;
+            for (int i = lo; i < hi; i++) {
+                Unsafe.getUnsafe().putChar(appendAddress + ((i - lo) << 1), Character.toLowerCase(value.charAt(i)));
             }
             appendAddress += len << 1;
             writeOffset();

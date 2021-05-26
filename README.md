@@ -37,20 +37,20 @@ QuestDB is a high performance open source SQL database for time series data.
 It uses a column-oriented approach, heavy parallelized vectorized execution,
 SIMD instructions and a whole array of low-latency techniques. The whole code
 base is built from scratch, without dependencies and 100% free from garbage
-collection. 
+collection.
 
-QuestDB implements SQL and augments it for time-series with native extensions. 
-It exposes a PostgreSQL wire protocol, high-performance REST API and supports 
-ingestion with InfluxDB Line Protocol. QuestDB uses a relational model with 
-maintenance-free schemas. Relational and time-series joins make it easy to 
-correlate data over time. Writes are durably committed to disk, meaning that
-the data is safe - yet instantly accessible.
+QuestDB implements SQL and augments it for time-series with native extensions.
+It exposes a PostgreSQL wire protocol, high-performance REST API and supports
+ingestion with InfluxDB Line Protocol. QuestDB uses a relational model with
+maintenance-free schemas. Relational and time-series joins make it easy to
+correlate data over time. Writes are durably committed to disk, meaning that the
+data is safe - yet instantly accessible.
 
 [QuestDB's documentation](https://questdb.io/docs/introduction/)
 
 ## Live demo
 
-Query [our demo](http://try.questdb.io:9000) dataset with 1.6 billion rows in
+Query [our demo](https://demo.questdb.io) dataset with 1.6 billion rows in
 milliseconds.
 
 ## Web Console
@@ -263,11 +263,13 @@ Thanks to these wonderful people
   </tr>
   <tr>
     <td align="center"><a href="https://github.com/Nagriar"><img src="https://avatars0.githubusercontent.com/u/2361099?v=4" width="100px;" alt=""/><br /><sub><b>Nagriar</b></sub></a><br /><a href="https://github.com/questdb/questdb/commits?author=Nagriar" title="Code">💻</a></td>
+    <td align="center"><a href="https://github.com/piotrrzysko"><img src="https://avatars.githubusercontent.com/u/6481553?v=4" width="100px;" alt=""/><br /><sub><b>piotrrzysko</b></sub></a><br /><a href="https://github.com/questdb/questdb/commits?author=piotrrzysko" title="Code">💻</a> <a href="https://github.com/questdb/questdb/commits?author=piotrrzysko" title="Tests">⚠️</a></td>
   </tr>
 </table>
 
-<!-- markdownlint-enable -->
+<!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 This project follows the

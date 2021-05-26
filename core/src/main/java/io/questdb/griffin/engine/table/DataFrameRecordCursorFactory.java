@@ -24,15 +24,13 @@
 
 package io.questdb.griffin.engine.table;
 
-import io.questdb.cairo.NullColumn;
-import io.questdb.cairo.ReadOnlyColumn;
-import io.questdb.cairo.SymbolMapReader;
-import io.questdb.cairo.TableReader;
+import io.questdb.cairo.*;
 import io.questdb.cairo.sql.*;
 import io.questdb.griffin.SqlExecutionContext;
 import io.questdb.std.IntList;
 import io.questdb.std.LongList;
 import io.questdb.std.Misc;
+import io.questdb.std.str.CharSink;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -66,13 +64,44 @@ public class DataFrameRecordCursorFactory extends AbstractDataFrameRecordCursorF
     }
 
     @Override
+    public void close() {
+        Misc.free(filter);
+        Misc.free(dataFrameCursorFactory);
+    }
+
+    @Override
     public boolean followedOrderByAdvice() {
         return followsOrderByAdvice;
     }
 
     @Override
+    public PageFrameCursor getPageFrameCursor(SqlExecutionContext executionContext) {
+        DataFrameCursor dataFrameCursor = dataFrameCursorFactory.getCursor(executionContext);
+        if (pageFrameCursor != null) {
+            return pageFrameCursor.of(dataFrameCursor);
+        } else if (framingSupported) {
+            pageFrameCursor = new TableReaderPageFrameCursor(columnIndexes, columnSizes);
+            return pageFrameCursor.of(dataFrameCursor);
+        } else {
+            return null;
+        }
+    }
+
+    @Override
     public boolean recordCursorSupportsRandomAccess() {
         return true;
+    }
+
+    @Override
+    public boolean supportPageFrameCursor() {
+        return framingSupported;
+    }
+
+    @Override
+    public void toSink(CharSink sink) {
+        sink.put("{\"name\":\"DataFrameRecordCursorFactory\", \"cursorFactory\":");
+        dataFrameCursorFactory.toSink(sink);
+        sink.put('}');
     }
 
     @Override
@@ -85,29 +114,6 @@ public class DataFrameRecordCursorFactory extends AbstractDataFrameRecordCursorF
             filter.init(cursor, executionContext);
         }
         return cursor;
-    }
-
-    @Override
-    public PageFrameCursor getPageFrameCursor(SqlExecutionContext executionContext) {
-        DataFrameCursor dataFrameCursor = dataFrameCursorFactory.getCursor(executionContext.getCairoSecurityContext());
-        if (pageFrameCursor != null) {
-            return pageFrameCursor.of(dataFrameCursor);
-        } else if (framingSupported) {
-            pageFrameCursor = new TableReaderPageFrameCursor(columnIndexes, columnSizes);
-            return pageFrameCursor.of(dataFrameCursor);
-        } else {
-            return null;
-        }
-    }
-
-    @Override
-    public boolean supportPageFrameCursor() {
-        return framingSupported;
-    }
-
-    @Override
-    public void close() {
-        Misc.free(filter);
     }
 
     private static class TableReaderPageFrameCursor implements PageFrameCursor {
@@ -135,11 +141,6 @@ public class DataFrameRecordCursorFactory extends AbstractDataFrameRecordCursorF
         @Override
         public void close() {
             dataFrameCursor = Misc.free(dataFrameCursor);
-        }
-
-        @Override
-        public SymbolMapReader getSymbolMapReader(int columnIndex) {
-            return reader.getSymbolMapReader(columnIndexes.getQuick(columnIndex));
         }
 
         @Override
@@ -178,7 +179,7 @@ public class DataFrameRecordCursorFactory extends AbstractDataFrameRecordCursorF
                         if (top >= partitionLo) {
                             loRemaining = 0;
                             top -= partitionLo;
-                            topsRemaining.setQuick(i, top);
+                            topsRemaining.setQuick(i, Math.min(top, partitionHi - partitionLo));
                         } else {
                             topsRemaining.setQuick(i, 0);
                             loRemaining -= top;
@@ -188,22 +189,19 @@ public class DataFrameRecordCursorFactory extends AbstractDataFrameRecordCursorF
                             final ReadOnlyColumn col = reader.getColumn(TableReader.getPrimaryColumnIndex(base, columnIndexes.getQuick(i)));
                             if (col instanceof NullColumn) {
                                 columnPageNextAddress.setQuick(i, 0);
-                                pageNRowsRemaining.setQuick(i, partitionSize - partitionLo);
+                                pageNRowsRemaining.setQuick(i, 0);
                             } else {
                                 int page = pages.getQuick(i);
-                                while (true) {
-                                    long pageSize = col.getPageSize(page) >> columnSizes.getQuick(i);
-                                    if (pageSize > loRemaining) {
-                                        long addr = col.getPageAddress(page);
-                                        addr += partitionLo << columnSizes.getQuick(i);
-                                        columnPageNextAddress.setQuick(i, addr);
-                                        pageNRowsRemaining.setQuick(i, pageSize - partitionLo);
-                                        pages.setQuick(i, page);
-                                        break;
-                                    }
-                                    loRemaining -= pageSize;
-                                    page++;
+                                long pageSize = col.getPageSize(page) >> columnSizes.getQuick(i);
+                                if (pageSize < loRemaining) {
+                                    throw CairoException.instance(0).put("partition is not mapped as single page, cannot perform vector calculation");
                                 }
+                                long addr = col.getPageAddress(page);
+                                addr += loRemaining << columnSizes.getQuick(i);
+                                columnPageNextAddress.setQuick(i, addr);
+                                long pageHi = Math.min(partitionHi, pageSize);
+                                pageNRowsRemaining.setQuick(i, pageHi - partitionLo);
+                                pages.setQuick(i, page);
                             }
                         }
                     }
@@ -228,6 +226,11 @@ public class DataFrameRecordCursorFactory extends AbstractDataFrameRecordCursorF
         @Override
         public long size() {
             return reader.size();
+        }
+
+        @Override
+        public SymbolMapReader getSymbolMapReader(int columnIndex) {
+            return reader.getSymbolMapReader(columnIndexes.getQuick(columnIndex));
         }
 
         public TableReaderPageFrameCursor of(DataFrameCursor dataFrameCursor) {
@@ -261,6 +264,9 @@ public class DataFrameRecordCursorFactory extends AbstractDataFrameRecordCursorF
                 }
             }
             partitionRemaining -= min;
+            if (partitionRemaining < 0) {
+                throw CairoException.instance(0).put("incorrect frame built for vector calculation");
+            }
             return frame;
         }
 

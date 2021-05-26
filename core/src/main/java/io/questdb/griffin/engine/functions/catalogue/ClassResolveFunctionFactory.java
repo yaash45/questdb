@@ -29,7 +29,10 @@ import io.questdb.cairo.sql.Function;
 import io.questdb.griffin.FunctionFactory;
 import io.questdb.griffin.SqlException;
 import io.questdb.griffin.SqlExecutionContext;
+import io.questdb.griffin.SqlKeywords;
 import io.questdb.griffin.engine.functions.constants.IntConstant;
+import io.questdb.griffin.engine.functions.date.ToPgDateFunctionFactory;
+import io.questdb.griffin.engine.functions.date.ToTimestampFunctionFactory;
 import io.questdb.std.CharSequenceObjHashMap;
 import io.questdb.std.ObjList;
 
@@ -47,11 +50,25 @@ public class ClassResolveFunctionFactory implements FunctionFactory {
     @Override
     public Function newInstance(ObjList<Function> args, int position, CairoConfiguration configuration, SqlExecutionContext sqlExecutionContext) throws SqlException {
         final Function nameFunction = args.getQuick(0);
-        final IntConstant func = map.get(nameFunction.getStr(null));
-        if (func != null) {
-            return func;
+        final CharSequence type = args.getQuick(1).getStr(null);
+
+        if (SqlKeywords.isRegclassKeyword(type)) {
+            final IntConstant func = map.get(nameFunction.getStr(null));
+            if (func != null) {
+                return func;
+            }
+            throw SqlException.$(nameFunction.getPosition(), "unsupported class");
         }
-        throw SqlException.$(nameFunction.getPosition(), "unsupported class");
+
+        if (SqlKeywords.isTimestampKeyword(type)) {
+            return new ToTimestampFunctionFactory.ToTimestampFunction(nameFunction.getPosition(), nameFunction);
+        }
+
+        if (SqlKeywords.isDateKeyword(type)) {
+            return new ToPgDateFunctionFactory.ToPgDateFunction(nameFunction.getPosition(), nameFunction);
+        }
+
+        throw SqlException.$(args.getQuick(1).getPosition(), "unsupported type");
     }
 
     static {

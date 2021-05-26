@@ -54,16 +54,16 @@ public class ToDateFunctionFactory implements FunctionFactory {
         if (pattern == null) {
             throw SqlException.$(args.getQuick(1).getPosition(), "pattern is required");
         }
-        return new Func(position, arg, tlCompiler.get().compile(pattern), configuration.getDefaultDateLocale());
+        return new ToDateFunction(position, arg, tlCompiler.get().compile(pattern), configuration.getDefaultDateLocale());
     }
 
-    private static final class Func extends DateFunction implements UnaryFunction {
+    private static final class ToDateFunction extends DateFunction implements UnaryFunction {
 
         private final Function arg;
         private final DateFormat dateFormat;
         private final DateLocale locale;
 
-        public Func(int position, Function arg, DateFormat dateFormat, DateLocale locale) {
+        public ToDateFunction(int position, Function arg, DateFormat dateFormat, DateLocale locale) {
             super(position);
             this.arg = arg;
             this.dateFormat = dateFormat;

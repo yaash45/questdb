@@ -47,7 +47,6 @@ import io.questdb.griffin.engine.table.*;
 import io.questdb.griffin.engine.union.*;
 import io.questdb.griffin.model.*;
 import io.questdb.std.*;
-import io.questdb.std.datetime.microtime.Timestamps;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -85,7 +84,7 @@ public class SqlCodeGenerator implements Mutable {
     private final ArrayColumnTypes keyTypes = new ArrayColumnTypes();
     private final ArrayColumnTypes valueTypes = new ArrayColumnTypes();
     private final EntityColumnFilter entityColumnFilter = new EntityColumnFilter();
-    private final ObjList<CharSequence> symbolValueList = new ObjList<>();
+    private final ObjList<Function> symbolValueList = new ObjList<>();
     private final ObjList<VectorAggregateFunction> tempVaf = new ObjList<>();
     private final GenericRecordMetadata tempMetadata = new GenericRecordMetadata();
     private final ArrayColumnTypes arrayColumnTypes = new ArrayColumnTypes();
@@ -904,8 +903,8 @@ public class SqlCodeGenerator implements Mutable {
             @NotNull IntList columnIndexes
     ) throws SqlException {
         final DataFrameCursorFactory dataFrameCursorFactory;
-        if (intrinsicModel.intervals != null) {
-            dataFrameCursorFactory = new IntervalBwdDataFrameCursorFactory(engine, tableName, model.getTableVersion(), intrinsicModel.intervals, timestampIndex);
+        if (intrinsicModel.hasIntervalFilters()) {
+            dataFrameCursorFactory = new IntervalBwdDataFrameCursorFactory(engine, tableName, model.getTableVersion(), intrinsicModel.buildIntervalModel(), timestampIndex);
         } else {
             dataFrameCursorFactory = new FullBwdDataFrameCursorFactory(engine, tableName, model.getTableVersion());
         }
@@ -916,6 +915,18 @@ public class SqlCodeGenerator implements Mutable {
         if (listColumnFilterA.size() == 1) {
             final int latestByIndex = listColumnFilterA.getColumnIndexFactored(0);
             final boolean indexed = metadata.isColumnIndexed(latestByIndex);
+
+            if (metadata.getColumnType(latestByIndex) != ColumnType.SYMBOL) {
+                return new LatestByAllFilteredRecordCursorFactory(
+                        metadata,
+                        configuration,
+                        dataFrameCursorFactory,
+                        RecordSinkFactory.getInstance(asm, metadata, listColumnFilterA, false),
+                        keyTypes,
+                        filter,
+                        columnIndexes
+                );
+            }
 
             if (intrinsicModel.keyColumn != null) {
                 // key column must always be the same as latest by column
@@ -2265,13 +2276,25 @@ public class SqlCodeGenerator implements Mutable {
             final String tableName = reader.getTableName();
 
             if (whereClause != null) {
+                CharSequence preferredKeyColumn = null;
+
+                if (listColumnFilterA.size() == 1) {
+                    final int latestByIndex = listColumnFilterA.getColumnIndexFactored(0);
+
+                    if (myMeta.getColumnType(latestByIndex) == ColumnType.SYMBOL) {
+                        preferredKeyColumn = latestBy.getQuick(0).token;
+                    }
+                }
 
                 final IntrinsicModel intrinsicModel = whereClauseParser.extract(
                         model,
                         whereClause,
                         readerMeta,
-                        latestByColumnCount > 0 ? latestBy.getQuick(0).token : null,
-                        readerTimestampIndex
+                        preferredKeyColumn,
+                        readerTimestampIndex,
+                        functionParser,
+                        myMeta,
+                        executionContext
                 );
 
                 // intrinsic parser can collapse where clause when removing parts it can replace
@@ -2289,7 +2312,7 @@ public class SqlCodeGenerator implements Mutable {
                 DataFrameCursorFactory dfcFactory;
 
                 if (latestByColumnCount > 0) {
-                    Function f = compileFilter(intrinsicModel, readerMeta, executionContext);
+                    Function f = compileFilter(intrinsicModel, myMeta, executionContext);
                     if (f != null && f.isConstant() && !f.getBool(null)) {
                         return new EmptyTableRecordCursorFactory(myMeta);
                     }
@@ -2310,22 +2333,10 @@ public class SqlCodeGenerator implements Mutable {
                 // below code block generates index-based filter
 
                 final boolean intervalHitsOnlyOnePartition;
-                if (intrinsicModel.intervals != null) {
-                    dfcFactory = new IntervalFwdDataFrameCursorFactory(engine, tableName, model.getTableVersion(), intrinsicModel.intervals, readerTimestampIndex);
-                    switch (reader.getPartitionedBy()) {
-                        case PartitionBy.DAY:
-                            intervalHitsOnlyOnePartition = isFocused(intrinsicModel.intervals, Timestamps.FLOOR_DD);
-                            break;
-                        case PartitionBy.MONTH:
-                            intervalHitsOnlyOnePartition = isFocused(intrinsicModel.intervals, Timestamps.FLOOR_MM);
-                            break;
-                        case PartitionBy.YEAR:
-                            intervalHitsOnlyOnePartition = isFocused(intrinsicModel.intervals, Timestamps.FLOOR_YYYY);
-                            break;
-                        default:
-                            intervalHitsOnlyOnePartition = true;
-                            break;
-                    }
+                if (intrinsicModel.hasIntervalFilters()) {
+                    RuntimeIntrinsicIntervalModel intervalModel = intrinsicModel.buildIntervalModel();
+                    dfcFactory = new IntervalFwdDataFrameCursorFactory(engine, tableName, model.getTableVersion(), intervalModel, readerTimestampIndex);
+                    intervalHitsOnlyOnePartition = intervalModel.allIntervalsHitOnePartition(reader.getPartitionedBy());
                 } else {
                     dfcFactory = new FullFwdDataFrameCursorFactory(engine, tableName, model.getTableVersion());
                     intervalHitsOnlyOnePartition = false;
@@ -2341,7 +2352,7 @@ public class SqlCodeGenerator implements Mutable {
                         final RecordCursorFactory rcf = generate(intrinsicModel.keySubQuery, executionContext);
                         final Record.CharSequenceFunction func = validateSubQueryColumnAndGetGetter(intrinsicModel, rcf.getMetadata());
 
-                        Function f = compileFilter(intrinsicModel, readerMeta, executionContext);
+                        Function f = compileFilter(intrinsicModel, myMeta, executionContext);
                         if (f != null && f.isConstant() && !f.getBool(null)) {
                             return new EmptyTableRecordCursorFactory(myMeta);
                         }
@@ -2398,15 +2409,26 @@ public class SqlCodeGenerator implements Mutable {
 
                             if (symbolKey == SymbolTable.VALUE_NOT_FOUND) {
                                 if (f == null) {
-                                    rcf = new DeferredSymbolIndexRowCursorFactory(keyColumnIndex, Chars.toString(symbol), true, indexDirection);
+                                    rcf = new DeferredSymbolIndexRowCursorFactory(keyColumnIndex,
+                                            functionParser.createBindVariable(intrinsicModel.keyValuePositions.getQuick(0), symbol),
+                                            true,
+                                            indexDirection
+                                    );
                                 } else {
-                                    rcf = new DeferredSymbolIndexFilteredRowCursorFactory(keyColumnIndex, Chars.toString(symbol), f, true, indexDirection, columnIndexes);
+                                    rcf = new DeferredSymbolIndexFilteredRowCursorFactory(
+                                            keyColumnIndex,
+                                            functionParser.createBindVariable(intrinsicModel.keyValuePositions.getQuick(0), symbol),
+                                            f,
+                                            true,
+                                            indexDirection,
+                                            columnIndexes
+                                    );
                                 }
                             } else {
                                 if (f == null) {
-                                    rcf = new SymbolIndexRowCursorFactory(keyColumnIndex, symbolKey, true, indexDirection);
+                                    rcf = new SymbolIndexRowCursorFactory(keyColumnIndex, symbolKey, true, indexDirection, null);
                                 } else {
-                                    rcf = new SymbolIndexFilteredRowCursorFactory(keyColumnIndex, symbolKey, f, true, indexDirection, columnIndexes);
+                                    rcf = new SymbolIndexFilteredRowCursorFactory(keyColumnIndex, symbolKey, f, true, indexDirection, columnIndexes, null);
                                 }
                             }
                             return new DataFrameRecordCursorFactory(myMeta, dfcFactory, rcf, orderByKeyColumn, f, false, columnIndexes, columnSizes);
@@ -2415,16 +2437,11 @@ public class SqlCodeGenerator implements Mutable {
                         symbolValueList.clear();
 
                         for (int i = 0, n = intrinsicModel.keyValues.size(); i < n; i++) {
-                            symbolValueList.add(intrinsicModel.keyValues.get(i));
+                            symbolValueList.add(functionParser.createBindVariable(intrinsicModel.keyValuePositions.getQuick(i), intrinsicModel.keyValues.get(i)));
                         }
 
                         if (orderByKeyColumn) {
                             myMeta.setTimestampIndex(-1);
-                            if (model.getOrderByDirectionAdvice().getQuick(0) == QueryModel.ORDER_DIRECTION_ASCENDING) {
-                                symbolValueList.sort(Chars.CHAR_SEQUENCE_COMPARATOR);
-                            } else {
-                                symbolValueList.sort(Chars.CHAR_SEQUENCE_COMPARATOR_DESC);
-                            }
                         }
 
                         return new FilterOnValuesRecordCursorFactory(
@@ -2436,16 +2453,20 @@ public class SqlCodeGenerator implements Mutable {
                                 f,
                                 model.getOrderByAdviceMnemonic(),
                                 orderByKeyColumn,
+                                model.getOrderByDirectionAdvice().getQuick(0),
                                 indexDirection,
                                 columnIndexes
                         );
 
-                    } else if (intrinsicModel.keyExcludedValues.size() > 0 && reader.getSymbolMapReader(keyColumnIndex).size() < configuration.getMaxSymbolNotEqualsCount()) {
+                    } else if (
+                            intrinsicModel.keyExcludedValues.size() > 0
+                                    && reader.getSymbolMapReader(keyColumnIndex).size() < configuration.getMaxSymbolNotEqualsCount()
+                    ) {
                         symbolValueList.clear();
                         for (int i = 0, n = intrinsicModel.keyExcludedValues.size(); i < n; i++) {
-                            symbolValueList.add(intrinsicModel.keyExcludedValues.get(i));
+                            symbolValueList.add(functionParser.createBindVariable(intrinsicModel.keyExcludedValuePositions.getQuick(i), intrinsicModel.keyExcludedValues.get(i)));
                         }
-                        Function f = compileFilter(intrinsicModel, readerMeta, executionContext);
+                        Function f = compileFilter(intrinsicModel, myMeta, executionContext);
                         if (f != null && f.isConstant()) {
                             try {
                                 if (!f.getBool(null)) {
@@ -2474,7 +2495,7 @@ public class SqlCodeGenerator implements Mutable {
                 if (intervalHitsOnlyOnePartition && intrinsicModel.filter == null) {
                     final ObjList<ExpressionNode> orderByAdvice = model.getOrderByAdvice();
                     final int orderByAdviceSize = orderByAdvice.size();
-                    if (orderByAdviceSize > 0 && orderByAdviceSize < 3 && intrinsicModel.intervals != null) {
+                    if (orderByAdviceSize > 0 && orderByAdviceSize < 3 && intrinsicModel.hasIntervalFilters()) {
                         // we can only deal with 'order by symbol, timestamp' at best
                         // skip this optimisation if order by is more extensive
                         final int columnIndex = myMeta.getColumnIndexQuiet(model.getOrderByAdvice().getQuick(0).token);
@@ -2628,16 +2649,6 @@ public class SqlCodeGenerator implements Mutable {
             return timestampIndex;
         }
         return metadata.getTimestampIndex();
-    }
-
-    private boolean isFocused(LongList intervals, Timestamps.TimestampFloorMethod floorMethod) {
-        long floor = floorMethod.floor(intervals.getQuick(0));
-        for (int i = 1, n = intervals.size(); i < n; i++) {
-            if (floor != floorMethod.floor(intervals.getQuick(i))) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private boolean isSingleColumnFunction(ExpressionNode ast, CharSequence name) {

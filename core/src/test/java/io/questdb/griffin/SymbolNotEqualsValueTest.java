@@ -179,6 +179,32 @@ public class SymbolNotEqualsValueTest extends AbstractGriffinTest {
     }
 
     @Test
+    public void testNotEquals1SymbolsWithEqualsAnogher() throws Exception {
+        final String expected = "k\tprice\tts\tj\n" +
+                "DXR\t0.6778564558839208\t1970-01-03T00:48:00.000000Z\tF\n" +
+                "DXR\t0.299199045961845\t1970-01-03T00:06:00.000000Z\tF\n";
+
+        assertQuery(
+                "k\tprice\tts\tj\n",
+                "select sym k, price, ts, sym2 j from x where sym2 = 'F' AND sym != 'ABB' order by k, j desc",
+                "create table x (\n" +
+                        "    sym symbol cache index,\n" +
+                        "    sym2 symbol cache index,\n" +
+                        "    price double,\n" +
+                        "    ts timestamp\n" +
+                        ") timestamp(ts) partition by DAY",
+                null,
+                "insert into x select * from (select rnd_symbol('ABB', 'HBC', 'DXR') sym, \n" +
+                        "        rnd_symbol('D', 'E', 'F') sym2, \n" +
+                        "        rnd_double() price, \n" +
+                        "        timestamp_sequence(172800000000, 360000000) ts \n" +
+                        "        from long_sequence(10)) timestamp (ts)",
+                expected,
+                true
+        );
+    }
+
+    @Test
     public void testNotEquals2Symbols() throws Exception {
         final String expected = "k\tprice\tts\n";
 
@@ -581,6 +607,33 @@ public class SymbolNotEqualsValueTest extends AbstractGriffinTest {
                 true,
                 true,
                 false,
+                true
+        );
+    }
+
+    @Test
+    public void testSymbolNotPresentAndThenInserted() throws Exception {
+        final String expected = "k\tprice\tts\n";
+
+        String query = "select sym k, price, ts from x where sym = 'ABC'";
+        assertQuery(
+                "k\tprice\tts\n",
+                query,
+                "create table x as (" +
+                        "select " +
+                        "rnd_symbol('ABB', 'HBC', 'DXR') sym, " +
+                        "rnd_double() price, " +
+                        "timestamp_sequence(172800000000, 360000000) ts " +
+                        "from long_sequence(10)" +
+                        ") timestamp(ts) partition by DAY",
+                "ts",
+                "insert into x select * from (select rnd_symbol('ABC') sym, \n" +
+                        "        rnd_double() price, \n" +
+                        "        timestamp_sequence(177800000000, 360000000) ts \n" +
+                        "    from long_sequence(2)) timestamp (ts)",
+                expected +
+                        "ABC\t0.6276954028373309\t1970-01-03T01:23:20.000000Z\n" +
+                        "ABC\t0.6778564558839208\t1970-01-03T01:29:20.000000Z\n",
                 true
         );
     }
