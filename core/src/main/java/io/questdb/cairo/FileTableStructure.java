@@ -28,7 +28,7 @@ import io.questdb.std.Unsafe;
 import io.questdb.std.str.DirectCharSequence;
 
 import static io.questdb.cairo.TableUtils.*;
-import static io.questdb.cairo.VirtualMemory.STRING_LENGTH_BYTES;
+import static io.questdb.cairo.vm.VmUtils.STRING_LENGTH_BYTES;
 import static io.questdb.cairo.replication.TableReplicationStreamHeaderSupport.SYMBOL_META_BLOCK_SIZE;
 
 public class FileTableStructure implements TableStructure {
@@ -153,5 +153,15 @@ public class FileTableStructure implements TableStructure {
 
     private long getColumnFlags(int columnIndex) {
         return Unsafe.getUnsafe().getLong(tableMetaFileAddress + META_OFFSET_COLUMN_TYPES + columnIndex * META_COLUMN_DATA_SIZE + 1);
+    }
+
+    @Override
+    public int getO3MaxUncommittedRows() {
+        return Unsafe.getUnsafe().getInt(tableMetaFileAddress + META_OFFSET_O3_MAX_UNCOMMITTED_ROWS);
+    }
+
+    @Override
+    public long getO3CommitHysteresisInMicros() {
+        return Unsafe.getUnsafe().getLong(tableMetaFileAddress + META_OFFSET_O3_COMMIT_HYSTERESIS_IN_MICROS);
     }
 }

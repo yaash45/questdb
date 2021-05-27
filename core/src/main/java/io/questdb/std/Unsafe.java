@@ -38,9 +38,10 @@ public final class Unsafe {
     private static final sun.misc.Unsafe UNSAFE;
     private static final AtomicLong MALLOC_COUNT = new AtomicLong(0);
     private static final AtomicLong FREE_COUNT = new AtomicLong(0);
-
+    //#if jdk.version!=8
     private static final long OVERRIDE;
     private static final Method implAddExports;
+    //#endif
 
     static {
         try {
@@ -53,15 +54,19 @@ public final class Unsafe {
 
             LONG_OFFSET = Unsafe.getUnsafe().arrayBaseOffset(long[].class);
             LONG_SCALE = msb(Unsafe.getUnsafe().arrayIndexScale(long[].class));
-
+            //#if jdk.version!=8
             OVERRIDE = AccessibleObject_override_fieldOffset();
             implAddExports = Module.class.getDeclaredMethod("implAddExports", String.class, Module.class);
+            //#endif
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
+        //#if jdk.version!=8
         makeAccessible(implAddExports);
+        //#endif
     }
 
+    //#if jdk.version!=8
     private static long AccessibleObject_override_fieldOffset() {
         if (isJava8Or11()) {
             return getFieldOffset(AccessibleObject.class, "override");
@@ -89,8 +94,6 @@ public final class Unsafe {
 
     private static boolean getOrdinaryObjectPointersCompressionStatus(boolean is32BitJVM) {
         class Probe {
-            private int intField;
-
             boolean probe() {
                 long offset = getFieldOffset(Probe.class, "intField");
                 if (offset == 8L) {
@@ -108,23 +111,24 @@ public final class Unsafe {
         }
         return new Probe().probe();
     }
+    //#endif
 
     private Unsafe() {
     }
 
     public static long arrayGetVolatile(long[] array, int index) {
         assert index > -1 && index < array.length;
-        return Unsafe.getUnsafe().getLongVolatile(array, LONG_OFFSET + (index << LONG_SCALE));
+        return Unsafe.getUnsafe().getLongVolatile(array, LONG_OFFSET + ((long) index << LONG_SCALE));
     }
 
     public static void arrayPutOrdered(long[] array, int index, long value) {
         assert index > -1 && index < array.length;
-        Unsafe.getUnsafe().putOrderedLong(array, LONG_OFFSET + (index << LONG_SCALE), value);
+        Unsafe.getUnsafe().putOrderedLong(array, LONG_OFFSET + ((long) index << LONG_SCALE), value);
     }
 
     public static long calloc(long size) {
         long ptr = malloc(size);
-        getUnsafe().setMemory(ptr, size, (byte) 0);
+        Vect.memset(ptr, size, 0);
         return ptr;
     }
 
@@ -188,7 +192,7 @@ public final class Unsafe {
         return ptr;
     }
 
-    static void recordMemAlloc(long size) {
+    public static void recordMemAlloc(long size) {
         MEM_USED.addAndGet(size);
     }
 
@@ -196,6 +200,7 @@ public final class Unsafe {
         return 31 - Integer.numberOfLeadingZeros(value);
     }
 
+    //#if jdk.version!=8
     /**
      * Equivalent to {@link AccessibleObject#setAccessible(boolean) AccessibleObject.setAccessible(true)}, except that
      * it does not produce an illegal access error or warning.
@@ -213,4 +218,5 @@ public final class Unsafe {
     }
 
     public static final Module JAVA_BASE_MODULE = System.class.getModule();
+    //#endif
 }

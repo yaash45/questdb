@@ -1,16 +1,18 @@
 package io.questdb.cairo.replication;
 
-import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Random;
 
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import io.questdb.cairo.AbstractCairoTest;
 import io.questdb.cairo.ColumnType;
-import io.questdb.cairo.TableReplicationPageFrameCursor;
 import io.questdb.cairo.TableReader;
+import io.questdb.cairo.TableReplicationPageFrameCursor;
 import io.questdb.cairo.TableReplicationRecordCursorFactory;
 import io.questdb.cairo.TableWriter;
 import io.questdb.cairo.replication.ReplicationStreamGenerator.ReplicationStreamGeneratorFrame;
@@ -48,8 +50,8 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
     private static NetworkFacade NF;
 
     @BeforeClass
-    public static void setUp() throws IOException {
-        AbstractCairoTest.setUp();
+    public static void setUpStatic() {
+        AbstractGriffinTest.setUpStatic();
         NF = new NetworkFacadeImpl() {
             @Override
             public int recv(long fd, long buffer, int bufferLen) {
@@ -66,13 +68,7 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
                 }
                 return SEND_HANDLER.send(fd, buffer, bufferLen);
             }
-
         };
-    }
-
-    @BeforeClass
-    public static void setUp2() {
-        AbstractGriffinTest.setUp2();
         sqlExecutionContext.getRandom().reset(0, 1);
     }
 
@@ -140,8 +136,8 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
     public void testBig() throws Exception {
         runTest("testSimple1", () -> {
             compiler.compile("CREATE TABLE source AS (" +
-                            "SELECT timestamp_sequence(0, 100000) ts, rnd_long(-55, 9009, 2) l FROM long_sequence(10000000)" +
-                            ") TIMESTAMP (ts) PARTITION BY DAY;",
+                    "SELECT timestamp_sequence(0, 100000) ts, rnd_long(-55, 9009, 2) l FROM long_sequence(10000000)" +
+                    ") TIMESTAMP (ts) PARTITION BY DAY;",
                     sqlExecutionContext);
             replicateTable("source", "dest", "(ts TIMESTAMP, l LONG) TIMESTAMP(ts) PARTITION BY DAY;", 0, Long.MAX_VALUE);
             engine.releaseInactive();
@@ -152,17 +148,17 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
     public void testReplicateWithColumnTop() throws Exception {
         runTest("testSimple1", () -> {
             compiler.compile("CREATE TABLE source AS (" +
-                            "SELECT timestamp_sequence(0, 100000) ts, rnd_long(-55, 9009, 2) l FROM long_sequence(100000)" +
-                            ") TIMESTAMP (ts) PARTITION BY DAY;",
+                    "SELECT timestamp_sequence(0, 100000) ts, rnd_long(-55, 9009, 2) l FROM long_sequence(100000)" +
+                    ") TIMESTAMP (ts) PARTITION BY DAY;",
                     sqlExecutionContext);
             compiler.compile("ALTER TABLE source ADD COLUMN colTop LONG", sqlExecutionContext);
             compiler.compile("INSERT INTO source(ts, l, colTop) " +
-                            "SELECT" +
-                            " timestamp_sequence(50000000000, 500000000) ts," +
-                            " rnd_long(-55, 9009, 2) l," +
-                            " rnd_long(-55, 9009, 2) colTop" +
-                            " from long_sequence(5)" +
-                            ";",
+                    "SELECT" +
+                    " timestamp_sequence(50000000000, 500000000) ts," +
+                    " rnd_long(-55, 9009, 2) l," +
+                    " rnd_long(-55, 9009, 2) colTop" +
+                    " from long_sequence(5)" +
+                    ";",
                     sqlExecutionContext);
 
             replicateTable(
@@ -179,17 +175,17 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
     public void testReplicateWithColumnTopWhenFirstFrameIsColumnTop() throws Exception {
         runTest("testSimple1", () -> {
             compiler.compile("CREATE TABLE source AS (" +
-                            "SELECT timestamp_sequence(0, 100000) ts, rnd_long(-55, 9009, 2) l FROM long_sequence(100000)" +
-                            ") TIMESTAMP (ts) PARTITION BY DAY;",
+                    "SELECT timestamp_sequence(0, 100000) ts, rnd_long(-55, 9009, 2) l FROM long_sequence(100000)" +
+                    ") TIMESTAMP (ts) PARTITION BY DAY;",
                     sqlExecutionContext);
             compiler.compile("ALTER TABLE source ADD COLUMN colTop LONG", sqlExecutionContext);
             compiler.compile("INSERT INTO source(ts, l, colTop) " +
-                            "SELECT" +
-                            " timestamp_sequence(50000000000, 500000000) ts," +
-                            " rnd_long(-55, 9009, 2) l," +
-                            " rnd_long(-55, 9009, 2) colTop" +
-                            " from long_sequence(5)" +
-                            ";",
+                    "SELECT" +
+                    " timestamp_sequence(50000000000, 500000000) ts," +
+                    " rnd_long(-55, 9009, 2) l," +
+                    " rnd_long(-55, 9009, 2) colTop" +
+                    " from long_sequence(5)" +
+                    ";",
                     sqlExecutionContext);
 
             replicateTable(
@@ -217,7 +213,8 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
             String sourceTableName,
             String destTableName,
             String tableCreateFields, long nFirstRow,
-            long maxRowsPerFrame) throws SqlException {
+            long maxRowsPerFrame
+    ) throws SqlException {
         long seed = System.currentTimeMillis();
         Random rnd = new Random(seed);
         LOG.info().$("Random seed [seed=").$(seed).$(']').$();
@@ -230,8 +227,7 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
                 list -> {
                     Collections.shuffle(list, rnd);
                     return list;
-                }
-        );
+                });
     }
 
     private void replicateTable(
@@ -240,7 +236,8 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
             String tableCreateFields,
             long nFirstRow,
             long maxRowsPerFrame,
-            ShuffleAlgo shuffleAlgo) throws SqlException {
+            ShuffleAlgo shuffleAlgo
+    ) throws SqlException {
         LOG.info().$("Replicating [sourceTableName=").$(sourceTableName).$(", destTableName=").$(destTableName).$();
         compiler.compile("CREATE TABLE " + destTableName + " " + tableCreateFields + ";", sqlExecutionContext);
         try (TableWriter writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, destTableName)) {
@@ -253,11 +250,10 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
         CompiledQuery querySrc = compiler.compile("select * from " + sourceTableName, sqlExecutionContext);
         try (
                 RecordCursorFactory factorySrc = querySrc.getRecordCursorFactory();
-                RecordCursor cursorSrc = factorySrc.getCursor(sqlExecutionContext);
-        ) {
+                RecordCursor cursorSrc = factorySrc.getCursor(sqlExecutionContext);) {
             CompiledQuery queryDst = compiler.compile("select * from " + destTableName, sqlExecutionContext);
             try (RecordCursorFactory factoryDst = queryDst.getRecordCursorFactory();
-                 RecordCursor cursorDst = factoryDst.getCursor(sqlExecutionContext)) {
+                    RecordCursor cursorDst = factoryDst.getCursor(sqlExecutionContext)) {
                 TestUtils.assertEquals(cursorSrc, factorySrc.getMetadata(), cursorDst, factoryDst.getMetadata());
             }
         }
@@ -277,7 +273,8 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
             long nFirstRow,
             long maxRowsPerFrame,
             TableWriter writer,
-            ShuffleAlgo frameShuffle) {
+            ShuffleAlgo frameShuffle
+    ) {
         RECV_HANDLER = new FilesFacadeRecvHandler() {
             @Override
             public int recv(long fd, long buf, int len) {

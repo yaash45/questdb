@@ -1,12 +1,19 @@
 package io.questdb.cairo.replication;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
-import io.questdb.cairo.*;
+import io.questdb.cairo.CairoConfiguration;
+import io.questdb.cairo.CairoEngine;
+import io.questdb.cairo.CairoException;
+import io.questdb.cairo.ColumnType;
+import io.questdb.cairo.FileTableStructure;
+import io.questdb.cairo.TableStructure;
+import io.questdb.cairo.TableUtils;
+import io.questdb.cairo.TableWriter;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
+import io.questdb.cairo.vm.AppendOnlyVirtualMemory;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
 import io.questdb.mp.SynchronizedJob;
@@ -127,8 +134,8 @@ public class SlaveReplicationService implements Closeable {
 
     private class ReplicationSlaveControllerJob extends SynchronizedJob {
         private Path path = new Path();
-        private final AppendMemory mem1 = new AppendMemory();
-        private final AppendMemory mem2 = new AppendMemory();
+        private final AppendOnlyVirtualMemory mem1 = new AppendOnlyVirtualMemory();
+        private final AppendOnlyVirtualMemory mem2 = new AppendOnlyVirtualMemory();
         private final DirectCharSequence charSeq = new DirectCharSequence();
         private final CharSequenceHashSet replicatedTableNames = new CharSequenceHashSet();
         private final ObjList<SlaveReplicationHandler> initialisingHandlers = new ObjList<SlaveReplicationHandler>();

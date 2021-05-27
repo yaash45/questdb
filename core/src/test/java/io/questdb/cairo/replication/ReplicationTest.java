@@ -7,9 +7,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.*;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
-import io.questdb.cairo.AbstractCairoTest;
 import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.CairoEngine;
 import io.questdb.cairo.DefaultCairoConfiguration;
@@ -47,8 +50,8 @@ public class ReplicationTest extends AbstractGriffinTest {
     private final static double REPLICATION_WAIT_TIMEOUT = 120;
 
     @BeforeClass
-    public static void setUp() throws IOException {
-        AbstractCairoTest.setUp();
+    public static void setUpStatic() {
+        AbstractGriffinTest.setUpStatic();
         NF = new NetworkFacadeImpl() {
             @Override
             public int recv(long fd, long buffer, int bufferLen) {
@@ -71,11 +74,6 @@ public class ReplicationTest extends AbstractGriffinTest {
                 return rc;
             }
         };
-    }
-
-    @BeforeClass
-    public static void setUp2() {
-        AbstractGriffinTest.setUp2();
         sqlExecutionContext.getRandom().reset(0, 1);
     }
 
@@ -115,8 +113,8 @@ public class ReplicationTest extends AbstractGriffinTest {
     public void testSimple1() throws Exception {
         runTest("testSimple1", () -> {
             compiler.compile("CREATE TABLE source AS (" +
-                            "SELECT timestamp_sequence(0, 1000000000) ts, rnd_long(-55, 9009, 2) l FROM long_sequence(20)" +
-                            ") TIMESTAMP (ts);",
+                    "SELECT timestamp_sequence(0, 1000000000) ts, rnd_long(-55, 9009, 2) l FROM long_sequence(20)" +
+                    ") TIMESTAMP (ts);",
                     sqlExecutionContext);
             replicateTable("source", "(ts TIMESTAMP, l LONG) TIMESTAMP(ts)");
         });
@@ -232,7 +230,7 @@ public class ReplicationTest extends AbstractGriffinTest {
         runTest("testSymbolColumn", () -> {
             runMasterSql("CREATE TABLE source AS (" +
                     "SELECT timestamp_sequence(0, 1000000000) ts, rnd_symbol(60,2,16,2) sym FROM long_sequence(1)" +
-                            ") TIMESTAMP(ts) PARTITION BY DAY;");
+                    ") TIMESTAMP(ts) PARTITION BY DAY;");
             replicateTable("source", null);
         });
     }
@@ -323,7 +321,7 @@ public class ReplicationTest extends AbstractGriffinTest {
         try (
                 RecordCursorFactory factory = query.getRecordCursorFactory();
                 RecordCursor cursor = factory.getCursor(selectSqlExecutionContext)) {
-            printer.print(cursor, factory.getMetadata(), true);
+            printer.print(cursor, factory.getMetadata(), true, sink);
         }
         return sink.toString();
     }
@@ -356,7 +354,7 @@ public class ReplicationTest extends AbstractGriffinTest {
     private void replicateTable(String tableName, String tableCreateFields, int expectedRows, double durationSeconds)
             throws SqlException, IOException {
         WorkerPoolConfiguration workerPoolConfig = new WorkerPoolConfiguration() {
-            private final int[] affinity = {-1, -1};
+            private final int[] affinity = { -1, -1 };
 
             @Override
             public boolean haltOnError() {
@@ -393,8 +391,7 @@ public class ReplicationTest extends AbstractGriffinTest {
 
         ObjList<CharSequence> slaveIps = new ObjList<>();
         slaveIps.add("127.0.0.1");
-        SlaveReplicationService.RuntimeSlaveReplicationConfiguration replicationConf =
-                new SlaveReplicationService.RuntimeSlaveReplicationConfiguration(tableName, slaveIps, masterPorts);
+        SlaveReplicationService.RuntimeSlaveReplicationConfiguration replicationConf = new SlaveReplicationService.RuntimeSlaveReplicationConfiguration(tableName, slaveIps, masterPorts);
         Assert.assertTrue(slaveReplicationService.tryAdd(replicationConf));
 
         // Wait for slave to commit

@@ -43,23 +43,6 @@ public final class Net {
     @SuppressWarnings("unused")
     public static final int EOTHERDISCONNECT = -2;
 
-    static {
-        Os.init();
-        EWOULDBLOCK = getEwouldblock();
-        EINPROGRESS = getEinprogress();
-        EALREADY = getEalready();
-        EISCONN = getEisconn();
-        if (Os.type == Os.LINUX_AMD64) {
-            MMSGHDR_SIZE = getMsgHeaderSize();
-            MMSGHDR_BUFFER_ADDRESS_OFFSET = getMsgHeaderBufferAddressOffset();
-            MMSGHDR_BUFFER_LENGTH_OFFSET = getMsgHeaderBufferLengthOffset();
-        } else {
-            MMSGHDR_SIZE = -1L;
-            MMSGHDR_BUFFER_ADDRESS_OFFSET = -1L;
-            MMSGHDR_BUFFER_LENGTH_OFFSET = -1L;
-        }
-    }
-
     private Net() {
     }
 
@@ -78,12 +61,7 @@ public final class Net {
     public static native int abortAccept(long fd);
 
     public static long accept(long fd) {
-        long acceptedFd = accept0(fd);
-        if (acceptedFd != -1L) {
-            assert Files.auditOpen(acceptedFd);
-            Files.bumpFileCount();
-        }
-        return acceptedFd;
+        return Files.bumpFileCount(accept0(fd));
     }
 
     public static void appendIP4(CharSink sink, long ip) {
@@ -186,9 +164,9 @@ public final class Net {
         }
     }
 
-    public static native int recv(long fd, long ptr, int len);
-
     public static native int peek(long fd, long ptr, int len);
+
+    public static native int recv(long fd, long ptr, int len);
 
     public static native int recvmmsg(long fd, long msgvec, int vlen);
 
@@ -199,6 +177,8 @@ public final class Net {
     public native static int setMulticastInterface(long fd, int ipv4address);
 
     public native static int setMulticastLoop(long fd, boolean loop);
+
+    public native static int setMulticastTtl(long fd, int ttl);
 
     public native static int setRcvBuf(long fd, int size);
 
@@ -217,21 +197,11 @@ public final class Net {
     public native static long sockaddr(int ipv4address, int port);
 
     public static long socketTcp(boolean blocking) {
-        final long fd = socketTcp0(blocking);
-        if (fd != -1L) {
-            assert Files.auditOpen(fd);
-            Files.bumpFileCount();
-        }
-        return fd;
+        return Files.bumpFileCount(socketTcp0(blocking));
     }
 
     public static long socketUdp() {
-        long fd = socketUdp0();
-        if (fd != -1L) {
-            assert Files.auditOpen(fd);
-            Files.bumpFileCount();
-        }
-        return fd;
+        return Files.bumpFileCount(socketUdp0());
     }
 
     private native static long accept0(long fd);
@@ -254,5 +224,20 @@ public final class Net {
 
     private native static int getEisconn();
 
-    public native static int setMulticastTtl(long fd, int ttl);
+    static {
+        Os.init();
+        EWOULDBLOCK = getEwouldblock();
+        EINPROGRESS = getEinprogress();
+        EALREADY = getEalready();
+        EISCONN = getEisconn();
+        if (Os.type == Os.LINUX_AMD64) {
+            MMSGHDR_SIZE = getMsgHeaderSize();
+            MMSGHDR_BUFFER_ADDRESS_OFFSET = getMsgHeaderBufferAddressOffset();
+            MMSGHDR_BUFFER_LENGTH_OFFSET = getMsgHeaderBufferLengthOffset();
+        } else {
+            MMSGHDR_SIZE = -1L;
+            MMSGHDR_BUFFER_ADDRESS_OFFSET = -1L;
+            MMSGHDR_BUFFER_LENGTH_OFFSET = -1L;
+        }
+    }
 }

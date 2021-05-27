@@ -8,10 +8,9 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import io.questdb.cairo.AbstractCairoTest;
 import io.questdb.cairo.ColumnType;
-import io.questdb.cairo.TableReplicationPageFrameCursor;
 import io.questdb.cairo.TableReader;
+import io.questdb.cairo.TableReplicationPageFrameCursor;
 import io.questdb.cairo.TableReplicationRecordCursorFactory;
 import io.questdb.cairo.TableWriter;
 import io.questdb.cairo.replication.ReplicationSlaveConnectionMultiplexer.ReplicationSlaveCallbacks;
@@ -38,14 +37,9 @@ public class ReplicationSlaveConnectionMultiplexerTest extends AbstractGriffinTe
     private static NetworkFacade NF;
 
     @BeforeClass
-    public static void setUp() throws IOException {
-        AbstractCairoTest.setUp();
+    public static void setUpStatic() {
+        AbstractGriffinTest.setUpStatic();
         NF = MockConnection.NETWORK_FACADE_INSTANCE;
-    }
-
-    @BeforeClass
-    public static void setUp2() {
-        AbstractGriffinTest.setUp2();
         sqlExecutionContext.getRandom().reset(0, 1);
     }
 
@@ -74,7 +68,7 @@ public class ReplicationSlaveConnectionMultiplexerTest extends AbstractGriffinTe
         try (
                 RecordCursorFactory factory = query.getRecordCursorFactory();
                 RecordCursor cursor = factory.getCursor(sqlExecutionContext)) {
-            printer.print(cursor, factory.getMetadata(), true);
+            printer.print(cursor, factory.getMetadata(), true, sink);
         }
         return sink.toString();
     }

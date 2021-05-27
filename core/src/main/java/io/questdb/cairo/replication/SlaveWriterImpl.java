@@ -61,7 +61,7 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
         this.writer = writer;
         columnCount = writer.getMetadata().getColumnCount();
         nRemainingFrames.set(0);
-        path.of(root).concat(writer.getName());
+        path.of(root).concat(writer.getTableName());
         pathRootLen = path.length();
         blockWriter = writer.newBlock();
 
@@ -224,7 +224,7 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
                     partition.preCommit(true);
                     lastPartition = partition;
                 } else {
-                    LOG.info().$("closing partition [table=").$(writer.getName()).$(", path=").$(path).$(']').$();
+                    LOG.info().$("closing partition [table=").$(writer.getTableName()).$(", path=").$(path).$(']').$();
                     partition.preCommit(false);
                     partition.clear();
                     partitionCache.add(partition);
@@ -237,7 +237,7 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
                 partitionByTimestamp.put(lastPartition.timestampHi, lastPartition);
                 usedPartitions.add(lastPartition);
             }
-            LOG.info().$("pre-commit complete [table=").$(writer.getName()).$(']').$();
+            LOG.info().$("pre-commit complete [table=").$(writer.getTableName()).$(']').$();
         } finally {
             unlockWriter();
         }
@@ -245,7 +245,7 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
 
     private PartitionDetails getPartitionDetails(long timestamp) {
         try {
-            long timestampHi = TableUtils.setPathForPartition(path, writer.getPartitionBy(), timestamp);
+            long timestampHi = TableUtils.setPathForPartition(path, writer.getPartitionBy(), timestamp, true);
             PartitionDetails partitionDetails = partitionByTimestamp.get(timestampHi);
             if (null == partitionDetails) {
                 int sz = partitionCache.size();
@@ -298,7 +298,7 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
             if (ff.mkdirs(path.put(Files.SEPARATOR).$(), mkDirMode) != 0) {
                 throw CairoException.instance(ff.errno()).put("Could not create directory: ").put(path);
             }
-            LOG.info().$("opening partition [table=").$(writer.getName()).$(", path=").$(path).$(']').$();
+            LOG.info().$("opening partition [table=").$(writer.getTableName()).$(", path=").$(path).$(']').$();
 
             for (int columnIndex = 0; columnIndex < columnCount; columnIndex++) {
                 if (columns.size() <= columnIndex) {
@@ -338,7 +338,7 @@ public class SlaveWriterImpl implements SlaveWriter, Closeable {
         }
 
         private void preCommit(boolean lastPartition) {
-            LOG.info().$("pre-commit partition [table=").$(writer.getName()).$(", lastPartition=").$(lastPartition).$(", path=").$(path).$(']').$();
+            LOG.info().$("pre-commit partition [table=").$(writer.getTableName()).$(", lastPartition=").$(lastPartition).$(", path=").$(path).$(']').$();
             for (int nMapping = 0; nMapping < partitionStruct.nAdditionalMappings; nMapping++) {
                 ff.unmapFileBlock(partitionStruct.getAdditionalMappingStart(nMapping), partitionStruct.getAdditionalMappingSize(nMapping));
             }

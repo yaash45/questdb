@@ -1,13 +1,11 @@
 package io.questdb.cairo.replication;
 
-import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import io.questdb.cairo.AbstractCairoTest;
 import io.questdb.cairo.ColumnType;
 import io.questdb.cairo.TableReader;
 import io.questdb.cairo.TableReplicationPageFrameCursor;
@@ -37,14 +35,9 @@ public class ReplicationMasterConnectionDemultiplexerTest extends AbstractGriffi
     private static NetworkFacade NF;
 
     @BeforeClass
-    public static void setUp() throws IOException {
-        AbstractCairoTest.setUp();
+    public static void setUpStatic() {
         NF = MockConnection.NETWORK_FACADE_INSTANCE;
-    }
-
-    @BeforeClass
-    public static void setUp2() {
-        AbstractGriffinTest.setUp2();
+        AbstractGriffinTest.setUpStatic();
         sqlExecutionContext.getRandom().reset(0, 1);
     }
 
@@ -139,7 +132,7 @@ public class ReplicationMasterConnectionDemultiplexerTest extends AbstractGriffi
         try (
                 RecordCursorFactory factory = query.getRecordCursorFactory();
                 RecordCursor cursor = factory.getCursor(sqlExecutionContext)) {
-            printer.print(cursor, factory.getMetadata(), true);
+            printer.print(cursor, factory.getMetadata(), true, sink);
         }
         return sink.toString();
     }
