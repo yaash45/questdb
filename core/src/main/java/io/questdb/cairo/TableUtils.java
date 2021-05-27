@@ -25,13 +25,18 @@
 package io.questdb.cairo;
 
 import io.questdb.cairo.sql.SymbolTable;
-import io.questdb.cairo.vm.*;
+import io.questdb.cairo.vm.AppendOnlyVirtualMemory;
+import io.questdb.cairo.vm.MappedReadOnlyMemory;
+import io.questdb.cairo.vm.MappedReadWriteMemory;
+import io.questdb.cairo.vm.PagedVirtualMemory;
+import io.questdb.cairo.vm.ReadOnlyVirtualMemory;
+import io.questdb.cairo.vm.VmUtils;
 import io.questdb.griffin.SqlException;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
-import io.questdb.std.CharSequenceIntHashMap;
 import io.questdb.std.Files;
 import io.questdb.std.FilesFacade;
+import io.questdb.std.LowerCaseCharSequenceIntHashMap;
 import io.questdb.std.Numbers;
 import io.questdb.std.Os;
 import io.questdb.std.Transient;
@@ -66,8 +71,8 @@ public final class TableUtils {
     public static final long META_OFFSET_TIMESTAMP_INDEX = 8;
     public static final long META_OFFSET_VERSION = 12;
     public static final long META_OFFSET_TABLE_ID = 16;
-    public static final long META_OFFSET_O3_MAX_UNCOMMITTED_ROWS = 20;
-    public static final long META_OFFSET_O3_COMMIT_HYSTERESIS_IN_MICROS = 24;
+    public static final long META_OFFSET_MAX_UNCOMMITTED_ROWS = 20;
+    public static final long META_OFFSET_COMMIT_LAG = 24;
     public static final String FILE_SUFFIX_I = ".i";
     public static final String FILE_SUFFIX_D = ".d";
     public static final int LONGS_PER_TX_ATTACHED_PARTITION = 4;
@@ -165,8 +170,8 @@ public final class TableUtils {
             mem.putInt(structure.getTimestampIndex());
             mem.putInt(tableVersion);
             mem.putInt(tableId);
-            mem.putInt(structure.getO3MaxUncommittedRows());
-            mem.putLong(structure.getO3CommitHysteresisInMicros());
+            mem.putInt(structure.getMaxUncommittedRows());
+            mem.putLong(structure.getCommitLag());
             mem.jumpTo(TableUtils.META_OFFSET_COLUMN_TYPES);
 
             for (int i = 0; i < count; i++) {
@@ -532,7 +537,7 @@ public final class TableUtils {
         }
     }
 
-    public static void validate(FilesFacade ff, MappedReadOnlyMemory metaMem, CharSequenceIntHashMap nameIndex) {
+    public static void validate(FilesFacade ff, MappedReadOnlyMemory metaMem, LowerCaseCharSequenceIntHashMap nameIndex) {
         try {
             final int metaVersion = metaMem.getInt(TableUtils.META_OFFSET_VERSION);
             if (ColumnType.VERSION != metaVersion && metaVersion != 404) {
@@ -735,6 +740,19 @@ public final class TableUtils {
                 }
             } while (++index < retryCount);
             throw CairoException.instance(0).put("Cannot open indexed file. Max number of attempts reached [").put(index).put("]. Last file tried: ").put(path);
+        } finally {
+            path.trimTo(rootLen);
+        }
+    }
+
+    static void openMetaSwapFileByIndex(FilesFacade ff, AppendOnlyVirtualMemory mem, Path path, int rootLen, int swapIndex) {
+        try {
+            path.concat(META_SWAP_FILE_NAME);
+            if (swapIndex > 0) {
+                path.put('.').put(swapIndex);
+            }
+            path.$();
+            mem.of(ff, path, ff.getPageSize());
         } finally {
             path.trimTo(rootLen);
         }

@@ -26,25 +26,25 @@ package io.questdb.cairo;
 
 import io.questdb.cairo.vm.MappedReadOnlyMemory;
 import io.questdb.cairo.vm.VmUtils;
-import io.questdb.std.CharSequenceIntHashMap;
 import io.questdb.std.Chars;
 import io.questdb.std.FilesFacade;
+import io.questdb.std.LowerCaseCharSequenceIntHashMap;
 import io.questdb.std.ObjList;
 
 public class TableWriterMetadata extends BaseRecordMetadata {
     private int symbolMapCount;
     private int version;
     private final int id;
-    private final int o3MaxUncommittedRows;
-    private final long o3CommitHysteresisInMicros;
+    private int maxUncommittedRows;
+    private long commitLag;
 
     public TableWriterMetadata(FilesFacade ff, MappedReadOnlyMemory metaMem) {
         this.columnCount = metaMem.getInt(TableUtils.META_OFFSET_COUNT);
-        this.columnNameIndexMap = new CharSequenceIntHashMap(columnCount);
+        this.columnNameIndexMap = new LowerCaseCharSequenceIntHashMap(columnCount);
         this.version = metaMem.getInt(TableUtils.META_OFFSET_VERSION);
         this.id = metaMem.getInt(TableUtils.META_OFFSET_TABLE_ID);
-        this.o3MaxUncommittedRows = metaMem.getInt(TableUtils.META_OFFSET_O3_MAX_UNCOMMITTED_ROWS);
-        this.o3CommitHysteresisInMicros = metaMem.getLong(TableUtils.META_OFFSET_O3_COMMIT_HYSTERESIS_IN_MICROS);
+        this.maxUncommittedRows = metaMem.getInt(TableUtils.META_OFFSET_MAX_UNCOMMITTED_ROWS);
+        this.commitLag = metaMem.getLong(TableUtils.META_OFFSET_COMMIT_LAG);
         TableUtils.validate(ff, metaMem, columnNameIndexMap);
         this.timestampIndex = metaMem.getInt(TableUtils.META_OFFSET_TIMESTAMP_INDEX);
         this.columnMetadata = new ObjList<>(this.columnCount);
@@ -138,11 +138,19 @@ public class TableWriterMetadata extends BaseRecordMetadata {
         return id;
     }
 
-    public int getO3MaxUncommittedRows() {
-        return o3MaxUncommittedRows;
+    public int getMaxUncommittedRows() {
+        return maxUncommittedRows;
     }
 
-    public long getO3CommitHysteresisInMicros() {
-        return o3CommitHysteresisInMicros;
+    public long getCommitLag() {
+        return commitLag;
+    }
+
+    public void setMaxUncommittedRows(int rows) {
+        this.maxUncommittedRows = rows;
+    }
+
+    public void setCommitLag(long micros) {
+        this.commitLag = micros;
     }
 }

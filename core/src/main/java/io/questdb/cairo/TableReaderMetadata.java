@@ -37,7 +37,7 @@ public class TableReaderMetadata extends BaseRecordMetadata implements Closeable
     private final MappedReadOnlyMemory metaMem;
     private final Path path;
     private final FilesFacade ff;
-    private final CharSequenceIntHashMap tmpValidationMap = new CharSequenceIntHashMap();
+    private final LowerCaseCharSequenceIntHashMap tmpValidationMap = new LowerCaseCharSequenceIntHashMap();
     private int id;
     private MappedReadOnlyMemory transitionMeta;
 
@@ -46,7 +46,7 @@ public class TableReaderMetadata extends BaseRecordMetadata implements Closeable
         this.ff = ff;
         this.metaMem = new SinglePageMappedReadOnlyPageMemory();
         this.columnMetadata = new ObjList<>(columnCount);
-        this.columnNameIndexMap = new CharSequenceIntHashMap();
+        this.columnNameIndexMap = new LowerCaseCharSequenceIntHashMap();
     }
 
     public TableReaderMetadata(FilesFacade ff, Path path) {
@@ -265,11 +265,11 @@ public class TableReaderMetadata extends BaseRecordMetadata implements Closeable
     }
 
     public int getMaxUncommittedRows() {
-        return metaMem.getInt(TableUtils.META_OFFSET_O3_MAX_UNCOMMITTED_ROWS);
+        return metaMem.getInt(TableUtils.META_OFFSET_MAX_UNCOMMITTED_ROWS);
     }
 
-    public long getO3CommitHysteresisMicros() {
-        return metaMem.getLong(TableUtils.META_OFFSET_O3_COMMIT_HYSTERESIS_IN_MICROS);
+    public long getCommitLag() {
+        return metaMem.getLong(TableUtils.META_OFFSET_COMMIT_LAG);
     }
 
     private TableColumnMetadata moveMetadata(int index, TableColumnMetadata metadata) {

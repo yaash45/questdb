@@ -297,6 +297,11 @@ public class TableReplicationPageFrameCursor implements PageFrameCursor {
             return firstTimestamp;
         }
 
+        @Override
+        public int getColumnSize(int columnIndex) {
+            return columnSizes.getQuick(columnIndex);
+        }
+
         public int getPartitionIndex() {
             return partitionIndex;
         }

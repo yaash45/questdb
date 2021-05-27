@@ -508,7 +508,7 @@ public class ExpressionParserTest extends AbstractCairoTest {
 
     @Test
     public void testComplexUnary2() throws Exception {
-        x("ab^-", "-a^b");
+        x("a-b^", "-a^b");
     }
 
     @Test
@@ -758,7 +758,7 @@ public class ExpressionParserTest extends AbstractCairoTest {
     public void testLiteralAndConstant() throws Exception {
         // expect that expression parser will stop after literal, because literal followed by constant does not
         // make sense
-        x("x", "x 'a b'");
+        x("x", "x \"a b\"");
     }
 
     @Test

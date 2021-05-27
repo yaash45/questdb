@@ -33,6 +33,7 @@ import io.questdb.cutlass.text.TextException;
 import io.questdb.cutlass.text.TextLoader;
 import io.questdb.griffin.engine.functions.catalogue.ShowSearchPathCursorFactory;
 import io.questdb.griffin.engine.functions.catalogue.ShowStandardConformingStringsCursorFactory;
+import io.questdb.griffin.engine.functions.catalogue.ShowTimeZoneFactory;
 import io.questdb.griffin.engine.functions.catalogue.ShowTransactionIsolationLevelCursorFactory;
 import io.questdb.griffin.engine.table.ShowColumnsRecordCursorFactory;
 import io.questdb.griffin.engine.table.TableListRecordCursorFactory;
@@ -806,8 +807,24 @@ public class SqlCompiler implements Closeable {
                         throw SqlException.$(lexer.lastTokenPosition(), "'column' or 'partition' expected");
                     }
 
+                } else if (SqlKeywords.isSetKeyword(tok)) {
+                    tok = expectToken(lexer, "'param'");
+                    if (SqlKeywords.isParamKeyword(tok)) {
+                        final int paramNameNamePosition = lexer.getPosition();
+                        tok = expectToken(lexer, "param name");
+                        final CharSequence paramName = GenericLexer.immutableOf(tok);
+                        tok = expectToken(lexer, "'='");
+                        if (tok.length() == 1 && tok.charAt(0) == '=') {
+                            CharSequence value = GenericLexer.immutableOf(SqlUtil.fetchNext(lexer));
+                            alterTableSetParam(paramName, value, paramNameNamePosition, writer);
+                        } else {
+                            throw SqlException.$(lexer.lastTokenPosition(), "'=' expected");
+                        }
+                    } else {
+                        throw SqlException.$(lexer.lastTokenPosition(), "'param' expected");
+                    }
                 } else {
-                    throw SqlException.$(lexer.lastTokenPosition(), "'add', 'drop', 'attach' or 'rename' expected");
+                    throw SqlException.$(lexer.lastTokenPosition(), "'add', 'drop', 'attach', 'set' or 'rename' expected");
                 }
             } catch (CairoException e) {
                 LOG.info().$("could not alter table [table=").$(tableName).$(", ex=").$((Sinkable) e).$();
@@ -835,6 +852,29 @@ public class SqlCompiler implements Closeable {
             throw SqlException.$(lexer.lastTokenPosition(), "'table' or 'system' expected");
         }
         return compiledQuery.ofAlter();
+    }
+
+    private void alterTableSetParam(CharSequence paramName, CharSequence value, int paramNameNamePosition, TableWriter writer) throws SqlException {
+        if (isMaxUncommittedRowsParam(paramName)) {
+            int maxUncommittedRows;
+            try {
+                maxUncommittedRows = Numbers.parseInt(value);
+            } catch (NumericException e) {
+                throw SqlException.$(paramNameNamePosition, "invalid value [value=").put(value).put(",parameter=").put(paramName).put(']');
+            }
+            if (maxUncommittedRows < 0) {
+                throw SqlException.$(paramNameNamePosition, "maxUncommittedRows must be non negative");
+            }
+            writer.setMetaMaxUncommittedRows(maxUncommittedRows);
+        } else if (isCommitLag(paramName)) {
+            long commitLag = SqlUtil.expectMicros(value, paramNameNamePosition);
+            if (commitLag < 0) {
+                throw SqlException.$(paramNameNamePosition, "commitLag must be non negative");
+            }
+            writer.setMetaCommitLag(commitLag);
+        } else {
+            throw SqlException.$(paramNameNamePosition, "unknown parameter '").put(paramName).put('\'');
+        }
     }
 
     private void alterTableAddColumn(int tableNamePosition, TableWriter writer) throws SqlException {
@@ -1357,13 +1397,13 @@ public class SqlCompiler implements Closeable {
             RecordToRowCopier copier,
             int cursorTimestampIndex,
             long batchSize,
-            long hysteresis
+            long commitLag
     ) {
         int timestampType = metadata.getColumnType(cursorTimestampIndex);
         if (timestampType == ColumnType.STRING || timestampType == ColumnType.SYMBOL) {
-            copyOrderedBatchedStrTimestamp(writer, cursor, copier, cursorTimestampIndex, batchSize, hysteresis);
+            copyOrderedBatchedStrTimestamp(writer, cursor, copier, cursorTimestampIndex, batchSize, commitLag);
         } else {
-            copyOrderedBatched0(writer, cursor, copier, cursorTimestampIndex, batchSize, hysteresis);
+            copyOrderedBatched0(writer, cursor, copier, cursorTimestampIndex, batchSize, commitLag);
         }
         writer.commit();
     }
@@ -1374,7 +1414,7 @@ public class SqlCompiler implements Closeable {
             RecordToRowCopier copier,
             int cursorTimestampIndex,
             long batchSize,
-            long hysteresis
+            long commmitLag
     ) {
         long deadline = batchSize;
         long rowCount = 0;
@@ -1384,7 +1424,7 @@ public class SqlCompiler implements Closeable {
             copier.copy(record, row);
             row.append();
             if (++rowCount > deadline) {
-                writer.commitHysteresis(hysteresis);
+                writer.commitWithLag(commmitLag);
                 deadline = rowCount + batchSize;
             }
         }
@@ -1396,7 +1436,7 @@ public class SqlCompiler implements Closeable {
             RecordToRowCopier copier,
             int cursorTimestampIndex,
             long batchSize,
-            long hysteresis
+            long commitLag
     ) {
         long deadline = batchSize;
         long rowCount = 0;
@@ -1409,7 +1449,7 @@ public class SqlCompiler implements Closeable {
                 copier.copy(record, row);
                 row.append();
                 if (++rowCount > deadline) {
-                    writer.commitHysteresis(hysteresis);
+                    writer.commitWithLag(commitLag);
                     deadline = rowCount + batchSize;
                 }
             } catch (NumericException numericException) {
@@ -1677,7 +1717,12 @@ public class SqlCompiler implements Closeable {
                     if (index > -1) {
                         final ExpressionNode node = model.getColumnValues().getQuick(i);
 
-                        final Function function = functionParser.parseFunction(node, GenericRecordMetadata.EMPTY, executionContext);
+                        final Function function = functionParser.parseFunction(
+                                node,
+                                GenericRecordMetadata.EMPTY,
+                                executionContext
+                        );
+
                         validateAndConsume(
                                 model,
                                 valueFunctions,
@@ -1686,6 +1731,7 @@ public class SqlCompiler implements Closeable {
                                 i,
                                 index,
                                 function,
+                                node.position,
                                 executionContext.getBindVariableService()
                         );
 
@@ -1718,6 +1764,7 @@ public class SqlCompiler implements Closeable {
                             i,
                             i,
                             function,
+                            node.position,
                             executionContext.getBindVariableService()
                     );
 
@@ -1848,7 +1895,7 @@ public class SqlCompiler implements Closeable {
                                     copier,
                                     writerTimestampIndex,
                                     model.getBatchSize(),
-                                    model.getHysteresis()
+                                    model.getCommitLag()
                             );
                         } else {
                             copyOrdered(writer, factory.getMetadata(), cursor, copier, writerTimestampIndex);
@@ -1988,7 +2035,7 @@ public class SqlCompiler implements Closeable {
     }
 
     private CompiledQuery sqlShow(SqlExecutionContext executionContext) throws SqlException {
-        final CharSequence tok = SqlUtil.fetchNext(lexer);
+        CharSequence tok = SqlUtil.fetchNext(lexer);
         if (null != tok) {
             if (isTablesKeyword(tok)) {
                 return compiledQuery.of(new TableListRecordCursorFactory(configuration.getFilesFacade(), configuration.getRoot()));
@@ -2008,9 +2055,16 @@ public class SqlCompiler implements Closeable {
             if (isSearchPath(tok)) {
                 return compiledQuery.of(new ShowSearchPathCursorFactory());
             }
+
+            if (SqlKeywords.isTimeKeyword(tok)) {
+                tok = SqlUtil.fetchNext(lexer);
+                if (tok != null && SqlKeywords.isZoneKeyword(tok)) {
+                    return compiledQuery.of(new ShowTimeZoneFactory());
+                }
+            }
         }
 
-        throw SqlException.position(lexer.lastTokenPosition()).put("expected 'tables' or 'columns'");
+        throw SqlException.position(lexer.lastTokenPosition()).put("expected 'tables', 'columns' or 'time zone'");
     }
 
     private CompiledQuery sqlShowColumns(SqlExecutionContext executionContext) throws SqlException {
@@ -2189,6 +2243,7 @@ public class SqlCompiler implements Closeable {
             int bottomUpColumnIndex,
             int metadataColumnIndex,
             Function function,
+            int functionPosition,
             BindVariableService bindVariableService
     ) throws SqlException {
 
@@ -2208,7 +2263,7 @@ public class SqlCompiler implements Closeable {
         }
 
         throw SqlException.inconvertibleTypes(
-                function.getPosition(),
+                functionPosition,
                 function.getType(),
                 model.getColumnValues().getQuick(bottomUpColumnIndex).token,
                 metadata.getColumnType(metadataColumnIndex),
@@ -2364,13 +2419,13 @@ public class SqlCompiler implements Closeable {
         }
 
         @Override
-        public int getO3MaxUncommittedRows() {
-            return model.getO3MaxUncommittedRows();
+        public int getMaxUncommittedRows() {
+            return model.getMaxUncommittedRows();
         }
 
         @Override
-        public long getO3CommitHysteresisInMicros() {
-            return model.getO3CommitHysteresisInMicros();
+        public long getCommitLag() {
+            return model.getCommitLag();
         }
 
         TableStructureAdapter of(CreateTableModel model, RecordMetadata metadata, IntIntHashMap typeCast) {

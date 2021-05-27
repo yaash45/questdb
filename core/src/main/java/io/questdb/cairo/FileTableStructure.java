@@ -156,12 +156,12 @@ public class FileTableStructure implements TableStructure {
     }
 
     @Override
-    public int getO3MaxUncommittedRows() {
-        return Unsafe.getUnsafe().getInt(tableMetaFileAddress + META_OFFSET_O3_MAX_UNCOMMITTED_ROWS);
+    public int getMaxUncommittedRows() {
+        return Unsafe.getUnsafe().getInt(tableMetaFileAddress + META_OFFSET_MAX_UNCOMMITTED_ROWS);
     }
 
     @Override
-    public long getO3CommitHysteresisInMicros() {
-        return Unsafe.getUnsafe().getLong(tableMetaFileAddress + META_OFFSET_O3_COMMIT_HYSTERESIS_IN_MICROS);
+    public long getCommitLag() {
+        return Unsafe.getUnsafe().getLong(tableMetaFileAddress + META_OFFSET_COMMIT_LAG);
     }
 }

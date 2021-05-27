@@ -1,4 +1,5 @@
 /*******************************************************************************
+
  *     ___                  _   ____  ____
  *    / _ \ _   _  ___  ___| |_|  _ \| __ )
  *   | | | | | | |/ _ \/ __| __| | | |  _ \
@@ -33,27 +34,12 @@ import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.ColumnType;
 import io.questdb.cairo.PartitionBy;
 import io.questdb.cairo.TableUtils;
-import io.questdb.griffin.model.AnalyticColumn;
-import io.questdb.griffin.model.ColumnCastModel;
-import io.questdb.griffin.model.CopyModel;
-import io.questdb.griffin.model.CreateTableModel;
-import io.questdb.griffin.model.ExecutionModel;
-import io.questdb.griffin.model.ExpressionNode;
-import io.questdb.griffin.model.InsertModel;
-import io.questdb.griffin.model.QueryColumn;
-import io.questdb.griffin.model.QueryModel;
-import io.questdb.griffin.model.RenameTableModel;
-import io.questdb.griffin.model.ReplicateModel;
-import io.questdb.griffin.model.WithClauseModel;
-import io.questdb.std.Chars;
-import io.questdb.std.GenericLexer;
-import io.questdb.std.LowerCaseAsciiCharSequenceHashSet;
-import io.questdb.std.LowerCaseAsciiCharSequenceIntHashMap;
-import io.questdb.std.LowerCaseCharSequenceObjHashMap;
-import io.questdb.std.Numbers;
-import io.questdb.std.NumericException;
-import io.questdb.std.ObjList;
-import io.questdb.std.ObjectPool;
+import io.questdb.griffin.model.*;
+import io.questdb.std.*;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import static io.questdb.griffin.SqlKeywords.*;
 
 public final class SqlParser {
 
@@ -216,69 +202,6 @@ public final class SqlParser {
         } catch (NumericException e) {
             throw err(lexer, "bad long integer");
         }
-    }
-
-    private long expectMicros(CharSequence tok, int position) throws SqlException {
-        int k = -1;
-
-        final int len = tok.length();
-
-        // look for end of digits
-        for (int i = 0; i < len; i++) {
-            char c = tok.charAt(i);
-            if (c < '0' || c > '9') {
-                k = i;
-                break;
-            }
-        }
-
-        if (k == -1) {
-            throw SqlException.$(position + len, "expected interval qualifier in ").put(tok);
-        }
-
-        try {
-            long interval = Numbers.parseLong(tok, 0, k);
-            int nChars = len - k;
-            if (nChars > 2) {
-                throw SqlException.$(position + k, "expected 1/2 letter interval qualifier in ").put(tok);
-            }
-
-            switch (tok.charAt(k)) {
-                case 's':
-                    if (nChars == 1) {
-                        // seconds
-                        return interval * 1_000_000L;
-                    }
-                    break;
-                case 'm':
-                    if (nChars == 1) {
-                        // minutes
-                        return interval * 60_000_000L;
-                    } else {
-                        if (tok.charAt(k + 1) == 's') {
-                            // millis
-                            return interval * 1_000;
-                        }
-                    }
-                    break;
-                case 'h':
-                    if (nChars == 1) {
-                        // hours
-                        return interval * 3_600_000_000L;
-                    }
-                    break;
-                case 'd':
-                    if (nChars == 1) {
-                        // days
-                        return interval * 86_400_000_000L;
-                    }
-                    break;
-            }
-        } catch (NumericException ex) {
-            // Ignored
-        }
-
-        throw SqlException.$(position + len, "invalid interval qualifier ").put(tok);
     }
 
     private ExpressionNode expectLiteral(GenericLexer lexer) throws SqlException {
@@ -531,8 +454,8 @@ public final class SqlParser {
             tok = optTok(lexer);
         }
 
-        int o3MaxUncommittedRows = configuration.getO3MaxUncommittedRows();
-        long o3CommitHysteresisInMicros = configuration.getO3CommitHysteresis();
+        int maxUncommittedRows = configuration.getMaxUncommittedRows();
+        long commitLag = configuration.getCommitLag();
 
         ExpressionNode partitionBy = parseCreateTablePartition(lexer, tok);
         if (partitionBy != null) {
@@ -545,14 +468,14 @@ public final class SqlParser {
                 ExpressionNode expr;
                 while ((expr = expr(lexer, (QueryModel) null)) != null) {
                     if (Chars.equals(expr.token, '=')) {
-                        if (isO3MaxUncommittedRowsParam(expr.lhs.token)) {
+                        if (isMaxUncommittedRowsParam(expr.lhs.token)) {
                             try {
-                                o3MaxUncommittedRows = Numbers.parseInt(expr.rhs.token);
+                                maxUncommittedRows = Numbers.parseInt(expr.rhs.token);
                             } catch (NumericException e) {
-                                throw SqlException.position(lexer.getPosition()).put(" could not parse o3MaxUncommittedRows value \"").put(expr.rhs.token).put('"');
+                                throw SqlException.position(lexer.getPosition()).put(" could not parse maxUncommittedRows value \"").put(expr.rhs.token).put('"');
                             }
-                        } else if (isO3CommitHysteresis(expr.lhs.token)) {
-                            o3CommitHysteresisInMicros = expectMicros(expr.rhs.token, lexer.getPosition());
+                        } else if (isCommitLag(expr.lhs.token)) {
+                            commitLag = SqlUtil.expectMicros(expr.rhs.token, lexer.getPosition());
                         } else {
                             throw SqlException.position(lexer.getPosition()).put(" unrecognized ").put(expr.lhs.token).put(" after WITH");
                         }
@@ -567,8 +490,8 @@ public final class SqlParser {
             }
         }
 
-        model.setO3MaxUncommittedRows(o3MaxUncommittedRows);
-        model.setO3CommitHysteresisInMicros(o3CommitHysteresisInMicros);
+        model.setMaxUncommittedRows(maxUncommittedRows);
+        model.setCommitLag(commitLag);
 
         if (tok == null || Chars.equals(tok, ';')) {
             return model;
@@ -1058,13 +981,13 @@ public final class SqlParser {
                 throw SqlException.$(lexer.lastTokenPosition(), "batch size must be positive integer");
             }
 
-            tok = tok(lexer, "into or hysteresis");
-            if (SqlKeywords.isHysteresis(tok)) {
+            tok = tok(lexer, "into or lag");
+            if (SqlKeywords.isLag(tok)) {
                 val = expectLong(lexer);
                 if (val > 0) {
-                    model.setHysteresis(val);
+                    model.setCommitLag(val);
                 } else {
-                    throw SqlException.$(lexer.lastTokenPosition(), "hysteresis must be a positive integer microseconds");
+                    throw SqlException.$(lexer.lastTokenPosition(), "lag must be a positive integer microseconds");
                 }
                 expectTok(lexer, "into");
             }
@@ -1370,7 +1293,7 @@ public final class SqlParser {
                 if (isAsKeyword(tok)) {
                     alias = GenericLexer.unquote(GenericLexer.immutableOf(tok(lexer, "alias")));
                 } else {
-                    alias = GenericLexer.immutableOf(tok);
+                    alias = GenericLexer.immutableOf(GenericLexer.unquote(tok));
                 }
                 tok = optTok(lexer);
             } else {

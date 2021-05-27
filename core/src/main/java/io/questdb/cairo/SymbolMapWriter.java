@@ -303,7 +303,9 @@ public class SymbolMapWriter implements Closeable {
         offsetMem.jumpTo(keyToOffset(0));
         charMem.jumpTo(0);
         indexWriter.truncate();
-        cache.clear();
+        if (cache != null) {
+            cache.clear();
+        }
     }
 
     public interface TransientSymbolCountChangeHandler {
