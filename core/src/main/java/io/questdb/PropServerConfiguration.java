@@ -243,6 +243,8 @@ public class PropServerConfiguration implements ServerConfiguration {
     private final long instanceHashHi;
     private final int sqlTxnScoreboardEntryCount;
     private final boolean o3QuickSortEnabled;
+    private final int sqlDistinctTimestampKeyCapacity;
+    private final double sqlDistinctTimestampLoadFactor;
     private boolean httpAllowDeflateBeforeSend;
     private int[] httpWorkerAffinity;
     private int[] httpMinWorkerAffinity;
@@ -661,6 +663,8 @@ public class PropServerConfiguration implements ServerConfiguration {
             if (this.locale == null) {
                 throw new ServerConfigurationException("cairo.date.locale", dateLocale);
             }
+            this.sqlDistinctTimestampKeyCapacity = getInt(properties, env, "cairo.sql.distinct.timestamp.key.capacity", 512);
+            this.sqlDistinctTimestampLoadFactor = getDouble(properties, env, "cairo.sql.distinct.timestamp.load.factor", 0.5);
 
             this.inputFormatConfiguration = new InputFormatConfiguration(
                     new DateFormatFactory(),
@@ -1705,6 +1709,16 @@ public class PropServerConfiguration implements ServerConfiguration {
         @Override
         public int getSqlMapPageSize() {
             return sqlMapPageSize;
+        }
+
+        @Override
+        public int getSqlDistinctTimestampKeyCapacity() {
+            return sqlDistinctTimestampKeyCapacity;
+        }
+
+        @Override
+        public double getSqlDistinctTimestampLoadFactor() {
+            return sqlDistinctTimestampLoadFactor;
         }
 
         @Override

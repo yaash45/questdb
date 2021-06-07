@@ -187,6 +187,13 @@ public final class SqlParser {
         }
     }
 
+    private ExpressionNode expectLiteral(GenericLexer lexer) throws SqlException {
+        CharSequence tok = tok(lexer, "literal");
+        int pos = lexer.lastTokenPosition();
+        validateLiteral(pos, tok);
+        return nextLiteral(GenericLexer.immutableOf(GenericLexer.unquote(tok)), pos);
+    }
+
     private long expectLong(GenericLexer lexer) throws SqlException {
         CharSequence tok = tok(lexer, "long integer");
         boolean negative;
@@ -202,13 +209,6 @@ public final class SqlParser {
         } catch (NumericException e) {
             throw err(lexer, "bad long integer");
         }
-    }
-
-    private ExpressionNode expectLiteral(GenericLexer lexer) throws SqlException {
-        CharSequence tok = tok(lexer, "literal");
-        int pos = lexer.lastTokenPosition();
-        validateLiteral(pos, tok);
-        return nextLiteral(GenericLexer.immutableOf(GenericLexer.unquote(tok)), pos);
     }
 
     private CharSequence expectTableNameOrSubQuery(GenericLexer lexer) throws SqlException {
@@ -956,19 +956,6 @@ public final class SqlParser {
         }
     }
 
-    private CharSequence setModelAliasAndTimestamp(GenericLexer lexer, QueryModel model) throws SqlException {
-        CharSequence tok;
-        tok = setModelAliasAndGetOptTok(lexer, model);
-
-        // expect [timestamp(column)]
-        ExpressionNode timestamp = parseTimestamp(lexer, tok);
-        if (timestamp != null) {
-            model.setTimestamp(timestamp);
-            tok = optTok(lexer);
-        }
-        return tok;
-    }
-
     private ExecutionModel parseInsert(GenericLexer lexer) throws SqlException {
 
         final InsertModel model = insertModelPool.next();
@@ -981,14 +968,10 @@ public final class SqlParser {
                 throw SqlException.$(lexer.lastTokenPosition(), "batch size must be positive integer");
             }
 
-            tok = tok(lexer, "into or lag");
-            if (SqlKeywords.isLag(tok)) {
-                val = expectLong(lexer);
-                if (val > 0) {
-                    model.setCommitLag(val);
-                } else {
-                    throw SqlException.$(lexer.lastTokenPosition(), "lag must be a positive integer microseconds");
-                }
+            tok = tok(lexer, "into or commitLag");
+            if (SqlKeywords.isCommitLag(tok)) {
+                int pos = lexer.getPosition();
+                model.setCommitLag(SqlUtil.expectMicros(tok(lexer, "lag value"), pos));
                 expectTok(lexer, "into");
             }
         }
@@ -1140,18 +1123,6 @@ public final class SqlParser {
         }
 
         return joinModel;
-    }
-
-    private CharSequence setModelAliasAndGetOptTok(GenericLexer lexer, QueryModel joinModel) throws SqlException {
-        CharSequence tok = optTok(lexer);
-        if (tok != null && tableAliasStop.excludes(tok)) {
-            if (SqlKeywords.isAsKeyword(tok)) {
-                tok = tok(lexer, "alias");
-            }
-            joinModel.setAlias(literal(lexer, tok));
-            tok = optTok(lexer);
-        }
-        return tok;
     }
 
     private void parseLatestBy(GenericLexer lexer, QueryModel model) throws SqlException {
@@ -1580,6 +1551,31 @@ public final class SqlParser {
                 }
             }
         }
+    }
+
+    private CharSequence setModelAliasAndGetOptTok(GenericLexer lexer, QueryModel joinModel) throws SqlException {
+        CharSequence tok = optTok(lexer);
+        if (tok != null && tableAliasStop.excludes(tok)) {
+            if (SqlKeywords.isAsKeyword(tok)) {
+                tok = tok(lexer, "alias");
+            }
+            joinModel.setAlias(literal(lexer, tok));
+            tok = optTok(lexer);
+        }
+        return tok;
+    }
+
+    private CharSequence setModelAliasAndTimestamp(GenericLexer lexer, QueryModel model) throws SqlException {
+        CharSequence tok;
+        tok = setModelAliasAndGetOptTok(lexer, model);
+
+        // expect [timestamp(column)]
+        ExpressionNode timestamp = parseTimestamp(lexer, tok);
+        if (timestamp != null) {
+            model.setTimestamp(timestamp);
+            tok = optTok(lexer);
+        }
+        return tok;
     }
 
     private int toColumnType(GenericLexer lexer, CharSequence tok) throws SqlException {
