@@ -198,7 +198,7 @@ public class ReplicationMasterConnectionDemultiplexerTest extends AbstractGriffi
                 ReplicationStreamGenerator streamGenerator = new ReplicationStreamGenerator()) {
 
             int masterTableId = reader.getMetadata().getId();
-            TableWriter writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, destTableName);
+            TableWriter writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, destTableName, "test");
             SlaveWriter slaveWriter = new SlaveWriterImpl(configuration).of(writer);
             slaveWriteByMasterTableId.put(masterTableId, slaveWriter);
 

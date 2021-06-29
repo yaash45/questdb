@@ -240,7 +240,7 @@ public class ReplicationStreamTest extends AbstractGriffinTest {
     ) throws SqlException {
         LOG.info().$("Replicating [sourceTableName=").$(sourceTableName).$(", destTableName=").$(destTableName).$();
         compiler.compile("CREATE TABLE " + destTableName + " " + tableCreateFields + ";", sqlExecutionContext);
-        try (TableWriter writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, destTableName)) {
+        try (TableWriter writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, destTableName, "test")) {
             sendReplicationStream(sourceTableName, nFirstRow, maxRowsPerFrame, writer, shuffleAlgo);
         }
         assertTableEquals(sourceTableName, destTableName);

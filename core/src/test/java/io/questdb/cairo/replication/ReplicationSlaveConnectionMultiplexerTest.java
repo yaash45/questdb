@@ -122,7 +122,7 @@ public class ReplicationSlaveConnectionMultiplexerTest extends AbstractGriffinTe
                 ReplicationStreamGenerator streamGenerator = new ReplicationStreamGenerator()) {
 
             int masterTableId = reader.getMetadata().getId();
-            TableWriter writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, destTableName);
+            TableWriter writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, destTableName, "test");
             @SuppressWarnings("resource")
             SlaveWriter slaveWriter = new SlaveWriterImpl(configuration).of(writer);
             done = slaveConnMux.tryAddSlaveWriter(masterTableId, slaveWriter);

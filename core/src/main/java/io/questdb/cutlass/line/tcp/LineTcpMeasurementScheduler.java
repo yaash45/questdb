@@ -51,6 +51,8 @@ import java.io.Closeable;
 import java.util.Arrays;
 import java.util.concurrent.locks.ReadWriteLock;
 
+import static io.questdb.network.IODispatcher.DISCONNECT_REASON_UNKNOWN_OPERATION;
+
 class LineTcpMeasurementScheduler implements Closeable {
     private static final Log LOG = LogFactory.getLog(LineTcpMeasurementScheduler.class);
     private static final int REBALANCE_EVENT_ID = -1; // A rebalance event is used to rebalance load across different threads
@@ -152,11 +154,15 @@ class LineTcpMeasurementScheduler implements Closeable {
                 ObjList<CharSequence> tableNames = tableUpdateDetailsByTableName.keys();
                 for (int n = 0, sz = tableNames.size(); n < sz; n++) {
                     TableUpdateDetails updateDetails = tableUpdateDetailsByTableName.get(tableNames.get(n));
-                    if (!updateDetails.assignedToJob) {
-                        updateDetails.close();
-                    }
+                    updateDetails.closeLocals();
                 }
                 tableUpdateDetailsByTableName.clear();
+
+                tableNames = idleTableUpdateDetailsByTableName.keys();
+                for (int n = 0, sz = tableNames.size(); n < sz; n++) {
+                    TableUpdateDetails updateDetails = idleTableUpdateDetailsByTableName.get(tableNames.get(n));
+                    updateDetails.closeLocals();
+                }
                 idleTableUpdateDetailsByTableName.clear();
             } finally {
                 tableUpdateDetailsLock.writeLock().unlock();
@@ -788,18 +794,29 @@ class LineTcpMeasurementScheduler implements Closeable {
 
         @Override
         public void close() {
+            tableUpdateDetailsLock.writeLock().lock();
+            try {
+                closeNoLock();
+            } finally {
+                tableUpdateDetailsLock.writeLock().unlock();
+            }
+        }
+
+        private void closeNoLock() {
             if (writerThreadId != Integer.MIN_VALUE) {
-                LOG.info().$("closing table [tableName=").$(tableName).$(']').$();
+                LOG.info().$("closing table writer [tableName=").$(tableName).$(']').$();
                 if (null != writer) {
                     writer.commit();
-                    writer.close();
-                    writer = null;
-                }
-                for (int n = 0; n < localDetailsArray.length; n++) {
-                    localDetailsArray[n].close();
-                    localDetailsArray[n] = null;
+                    writer = Misc.free(writer);
                 }
                 writerThreadId = Integer.MIN_VALUE;
+            }
+        }
+
+        private void closeLocals() {
+            for (int n = 0; n < localDetailsArray.length; n++) {
+                LOG.info().$("closing table parsers [tableName=").$(tableName).$(']').$();
+                localDetailsArray[n] = Misc.free(localDetailsArray[n]);
             }
         }
 
@@ -814,7 +831,7 @@ class LineTcpMeasurementScheduler implements Closeable {
             if (null != writer) {
                 return writer;
             }
-            return writer = engine.getWriter(securityContext, tableName);
+            return writer = engine.getWriter(securityContext, tableName, "ilpTcp");
         }
 
         void handleRowAppended() {
@@ -1218,7 +1235,7 @@ class LineTcpMeasurementScheduler implements Closeable {
                     case QUEUE_FULL:
                         return true;
                     case NEEDS_DISCONNECT:
-                        context.getDispatcher().disconnect(context);
+                        context.getDispatcher().disconnect(context, DISCONNECT_REASON_UNKNOWN_OPERATION);
                         return false;
                 }
             }

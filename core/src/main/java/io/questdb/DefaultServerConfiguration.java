@@ -39,6 +39,8 @@ import io.questdb.cutlass.line.udp.DefaultLineUdpReceiverConfiguration;
 import io.questdb.cutlass.line.udp.LineUdpReceiverConfiguration;
 import io.questdb.cutlass.pgwire.DefaultPGWireConfiguration;
 import io.questdb.cutlass.pgwire.PGWireConfiguration;
+import io.questdb.metrics.DefaultMetricsConfiguration;
+import io.questdb.metrics.MetricsConfiguration;
 import io.questdb.mp.WorkerPoolConfiguration;
 
 public class DefaultServerConfiguration implements ServerConfiguration {
@@ -49,6 +51,7 @@ public class DefaultServerConfiguration implements ServerConfiguration {
     private final DefaultPGWireConfiguration pgWireConfiguration = new DefaultPGWireConfiguration();
     private final MasterReplicationConfiguration masterReplicationConfiguration = new DefaultMasterReplicationConfiguration();
     private final SlaveReplicationConfiguration slaveReplicationConfiguration = new DefaultSlaveReplicationConfiguration();
+    private final DefaultMetricsConfiguration metricsConfiguration = new DefaultMetricsConfiguration();
 
     public DefaultServerConfiguration(CharSequence root) {
         this.cairoConfiguration = new DefaultCairoConfiguration(root);
@@ -97,5 +100,10 @@ public class DefaultServerConfiguration implements ServerConfiguration {
     @Override
     public PGWireConfiguration getPGWireConfiguration() {
         return pgWireConfiguration;
+    }
+
+    @Override
+    public MetricsConfiguration getMetricsConfiguration() {
+        return metricsConfiguration;
     }
 }

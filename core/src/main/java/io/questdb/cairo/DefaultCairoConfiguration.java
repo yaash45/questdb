@@ -216,7 +216,7 @@ public class DefaultCairoConfiguration implements CairoConfiguration {
 
     @Override
     public long getSpinLockTimeoutUs() {
-        return 1000000;
+        return 5000000;
     }
 
     @Override
@@ -549,5 +549,10 @@ public class DefaultCairoConfiguration implements CairoConfiguration {
     @Override
     public boolean isO3QuickSortEnabled() {
         return false;
+    }
+
+    @Override
+    public int getLatestByQueueCapacity() {
+        return 32;
     }
 }

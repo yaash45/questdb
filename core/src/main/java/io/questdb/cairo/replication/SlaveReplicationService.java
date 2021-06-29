@@ -32,6 +32,7 @@ import io.questdb.std.str.Path;
 
 public class SlaveReplicationService implements Closeable {
     private static final Log LOG = LogFactory.getLog(SlaveReplicationService.class);
+    private static final String WRITER_LOCK_REASON = "slaveReplicationService";
     private static final AtomicLong NEXT_PEER_ID = new AtomicLong();
     private static final UUID VM_UUID = UUID.randomUUID();
     private final CairoConfiguration configuration;
@@ -385,7 +386,7 @@ public class SlaveReplicationService implements Closeable {
                             .$(", tableStructureVersion=").$(masterTableStructureVersion).$(']').$();
                     long localRowCount;
                     if (engine.getStatus(AllowAllCairoSecurityContext.INSTANCE, path, getTableName()) == TableUtils.TABLE_EXISTS) {
-                        writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, getTableName());
+                        writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, getTableName(), WRITER_LOCK_REASON);
                         long localTableStructureVersion = writer.getStructureVersion();
                         if (localTableStructureVersion == masterTableStructureVersion) {
                             localRowCount = writer.size();
@@ -616,7 +617,7 @@ public class SlaveReplicationService implements Closeable {
                                 .ofSymbolBlock(bufferAddress + metaDataOffset + metaDataLength, bufferLen - (metaDataOffset + metaDataLength));
 
                         TableUtils.createTable(ff, mem1, path, root, tableStructure, configuration.getMkDirMode(), ColumnType.VERSION, (int) engine.getNextTableId());
-                        writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, getTableName());
+                        writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, getTableName(), WRITER_LOCK_REASON);
                         return true;
                     }catch (CairoException ex) {
                         LOG.info().$("could not create table [tableName=").$(getTableName()).$(", masterTableId=").$(masterTableId).$(", errno=").$(ex.getErrno()).$(", exception=")
