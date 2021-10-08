@@ -60,8 +60,8 @@ public class LinuxMMLineProtoReceiver extends AbstractLineProtoReceiver {
             long p = msgVec;
             for (int i = 0; i < count; i++) {
                 long buf = nf.getMMsgBuf(p);
-                lexer.parse(buf, buf + nf.getMMsgBufLen(p));
-                lexer.parseLast();
+                parser.parse(buf, buf + nf.getMMsgBufLen(p));
+                parser.parseLast();
                 p += Net.MMSGHDR_SIZE;
             }
 
@@ -69,7 +69,7 @@ public class LinuxMMLineProtoReceiver extends AbstractLineProtoReceiver {
 
             if (totalCount > commitRate) {
                 totalCount = 0;
-                parser.commitAll(commitMode);
+                listener.commitAll(commitMode);
             }
 
             if (ran) {
@@ -78,7 +78,7 @@ public class LinuxMMLineProtoReceiver extends AbstractLineProtoReceiver {
 
             ran = true;
         }
-        parser.commitAll(commitMode);
+        listener.commitAll(commitMode);
         return ran;
     }
 }

@@ -144,13 +144,13 @@ public class NewLineProtocolParserLexerTest extends LineProtoLexerTest {
     public void testWithEscapedKeys() {
         assertThat(
                 "measurement,t ag=value with space,tag2=value field=10000i,field 2=\"str=special,end\" 100000\n",
-                "measurement,t\\ ag=value\\ with\\ space,tag2=value field=10000i,field\\ 2=\"str=special,end\" 100000\n", 15
+                "measurement,t\\ ag=value\\ with\\ space,tag2=value field=10000i,field\\ 2=\"str=special,end\" 100000\n"
         );
 
-//        assertThat(
-//                "measurement,t\"ag=value with space,tag2=value field=10000i,field 2=\"str=special,end\" 100000\n",
-//                "measurement,t\\\"ag=value\\ with\\ space,tag2=value field=10000i,field\\ 2=\"str=special,end\" 100000\n"
-//        );
+        assertThat(
+                "measurement,t\"ag=value with space,tag2=value field=10000i,field 2=\"str=special,end\" 100000\n",
+                "measurement,t\\\"ag=value\\ with\\ space,tag2=value field=10000i,field\\ 2=\"str=special,end\" 100000\n"
+        );
     }
 
     @Override
@@ -200,18 +200,11 @@ public class NewLineProtocolParserLexerTest extends LineProtoLexerTest {
                 sink.clear();
                 resetParser(mem + fullLen);
                 parseMeasurement(memFull, mem, fullLen, i, 0);
-//                int nextBreak = Math.abs(rnd.nextInt()) % (len - i);
-//                if (nextBreak > 0) {
-//                    parseMeasurement(mem + i + nextBreak);
-//                }
                 boolean complete;
                 complete = parseMeasurement(memFull, mem, fullLen, fullLen, i);
                 Assert.assertTrue(complete);
                 if (!Chars.equals(expected, sink)) {
                     System.out.println(lineStr.substring(0, i));
-//                    if (nextBreak > 0) {
-//                        System.out.println(lineStr.substring(0, i + nextBreak));
-//                    }
                     System.out.println(lineStr.substring(i));
                     TestUtils.assertEquals("parse split " + i, expected, sink);
                 }

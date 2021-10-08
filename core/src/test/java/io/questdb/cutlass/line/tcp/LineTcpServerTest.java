@@ -55,6 +55,7 @@ import io.questdb.std.str.StringSink;
 import io.questdb.test.tools.TestUtils;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.net.URL;
@@ -64,6 +65,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
 public class LineTcpServerTest extends AbstractCairoTest {
+    public static final int WAIT_NO_WAIT = 0;
+    public static final int WAIT_ENGINE_TABLE_RELEASE = 1;
+    public static final int WAIT_ILP_TABLE_RELEASE = 2;
     private final static Log LOG = LogFactory.getLog(LineTcpServerTest.class);
     private final static String AUTH_KEY_ID1 = "testUser1";
     private final static PrivateKey AUTH_PRIVATE_KEY1 = AuthDb.importPrivateKey("5UjEMuA0Pj5pjK8a-fa24dyIf-Es5mYny3oE_Wmus48");
@@ -167,12 +171,50 @@ public class LineTcpServerTest extends AbstractCairoTest {
             return aggressiveReadRetryCount;
         }
     };
-
     private Path path;
 
     @After
     public void cleanup() {
         maxMeasurementSize = 50;
+    }
+
+    @Test
+    public void testFieldValuesHasEqualsChar() throws Exception {
+        maxMeasurementSize = 250;
+        String lineData = "tab ts_nsec=1111111111111111111i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                        + "tab ts_nsec=2222222222222222222i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                        + "tab ts_nsec=3333333333333333333i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                        + "tab ts_nsec=4444444444444444444i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                        + "tab ts_nsec=5555555555555555555i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                        + "tab ts_nsec=6666666666666666666i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n";
+        runInContext((server) -> {
+            send(server, lineData, "tab", WAIT_ENGINE_TABLE_RELEASE, false);
+
+            String expected = "ts_nsec\traw_msg\ttimestamp\n" +
+                    "1111111111111111111\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+                    "2222222222222222222\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+                    "3333333333333333333\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+                    "4444444444444444444\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+                    "5555555555555555555\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+                    "6666666666666666666\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n";
+            assertTable(expected, "tab");
+        });
+    }
+
+    @Test
+    @Ignore // TODO: fix or accept quoted strings only
+    public void testFieldWithUnquotedString() throws Exception {
+        maxMeasurementSize = 250;
+        String lineData = "tab raw_msg=____ 1619509249714000000\n"
+                + "tab raw_msg=__\"_ 1619509249714000000\n";
+        runInContext((server) -> {
+            send(server, lineData, "tab", WAIT_ENGINE_TABLE_RELEASE, false);
+
+            String expected = "raw_msg\ttimestamp\n" +
+                    "____\t2021-04-27T07:40:49.714000Z\n" +
+                    "__\"_\t2021-04-27T07:40:49.714000Z\n";
+            assertTable(expected, "tab");
+        });
     }
 
     @Test
@@ -240,7 +282,6 @@ public class LineTcpServerTest extends AbstractCairoTest {
             assertTable(expected, "weather");
         });
     }
-
 
     @Test
     public void testGoodAuthenticated() throws Exception {
@@ -534,30 +575,6 @@ public class LineTcpServerTest extends AbstractCairoTest {
     }
 
     @Test
-    public void testFieldValuesHasEqualsChar() throws Exception {
-        maxMeasurementSize = 250;
-        String lineData =
-                  "tab ts_nsec=1111111111111111111i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
-                + "tab ts_nsec=2222222222222222222i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
-                + "tab ts_nsec=3333333333333333333i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
-                + "tab ts_nsec=4444444444444444444i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
-                + "tab ts_nsec=5555555555555555555i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
-                + "tab ts_nsec=6666666666666666666i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n";
-        runInContext((server) -> {
-            send(server, lineData, "tab", WAIT_ENGINE_TABLE_RELEASE, false);
-
-            String expected = "ts_nsec\traw_msg\ttimestamp\n" +
-                    "1111111111111111111\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
-                    "2222222222222222222\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
-                    "3333333333333333333\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
-                    "4444444444444444444\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
-                    "5555555555555555555\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
-                    "6666666666666666666\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n";
-            assertTable(expected, "tab");
-        });
-    }
-
-    @Test
     public void testWriterAllLongs() throws Exception {
         currentMicros = 1;
         try (TableModel m = new TableModel(configuration, "messages", PartitionBy.MONTH)) {
@@ -576,6 +593,32 @@ public class LineTcpServerTest extends AbstractCairoTest {
             String expected = "ts\tid\tauthor\tguild\tchannel\tflags\n" +
                     "1970-01-01T00:00:00.000001Z\t843530699759026177\t820703963477180437\t820704412095479830\t820704412095479833\t6\n";
             assertTable(expected, "messages");
+        });
+    }
+
+    @Test
+    public void testWriterCommitFails() throws Exception {
+        try (TableModel m = new TableModel(configuration, "table_a", PartitionBy.DAY)) {
+            m.timestamp("ReceiveTime")
+                    .col("SequenceNumber", ColumnType.SYMBOL).indexed(true, 256)
+                    .col("MessageType", ColumnType.SYMBOL).indexed(true, 256)
+                    .col("Length", ColumnType.INT);
+            CairoTestUtils.createTableWithVersion(m, ColumnType.VERSION);
+        }
+
+        runInContext((server) -> {
+            ff = new FilesFacadeImpl() {
+                @Override
+                public int rmdir(Path path) {
+                    return 5;
+                }
+            };
+
+            String lineData = "table_a,MessageType=B,SequenceNumber=1 Length=92i,test=1.5 1465839830100400000\n";
+            send(server, lineData, "table_a", WAIT_ENGINE_TABLE_RELEASE, false);
+
+            String expected = "ReceiveTime\tSequenceNumber\tMessageType\tLength\n";
+            assertTable(expected, "table_a");
         });
     }
 
@@ -697,41 +740,10 @@ public class LineTcpServerTest extends AbstractCairoTest {
         });
     }
 
-    @Test
-    public void testWriterCommitFails() throws Exception {
-        try (TableModel m = new TableModel(configuration, "table_a", PartitionBy.DAY)) {
-            m.timestamp("ReceiveTime")
-                    .col("SequenceNumber", ColumnType.SYMBOL).indexed(true, 256)
-                    .col("MessageType", ColumnType.SYMBOL).indexed(true, 256)
-                    .col("Length", ColumnType.INT);
-            CairoTestUtils.createTableWithVersion(m, ColumnType.VERSION);
-        }
-
-        runInContext((server) -> {
-            ff = new FilesFacadeImpl() {
-                @Override
-                public int rmdir(Path path) {
-                    return 5;
-                }
-            };
-
-            String lineData = "table_a,MessageType=B,SequenceNumber=1 Length=92i,test=1.5 1465839830100400000\n";
-            send(server, lineData, "table_a", WAIT_ENGINE_TABLE_RELEASE, false);
-
-            String expected = "ReceiveTime\tSequenceNumber\tMessageType\tLength\n";
-            assertTable(expected, "table_a");
-        });
-    }
-
     private void assertTable(CharSequence expected, CharSequence tableName) {
         try (TableReader reader = engine.getReader(AllowAllCairoSecurityContext.INSTANCE, tableName)) {
             assertCursorTwoPass(expected, reader.getCursor(), reader.getMetadata());
         }
-    }
-
-    @FunctionalInterface
-    private interface LineTcpServerAwareContext {
-        void run(LineTcpServer server);
     }
 
     private void runInContext(LineTcpServerAwareContext r) throws Exception {
@@ -763,10 +775,6 @@ public class LineTcpServerTest extends AbstractCairoTest {
         send(server, lineData, tableName, wait, true);
     }
 
-    public static final int WAIT_NO_WAIT = 0;
-    public static final int WAIT_ENGINE_TABLE_RELEASE = 1;
-    public static final int WAIT_ILP_TABLE_RELEASE = 2;
-
     private void send(LineTcpServer server, String lineData, String tableName, int wait, boolean noLinger) {
         SOCountDownLatch releaseLatch = new SOCountDownLatch(1);
         switch (wait) {
@@ -782,7 +790,7 @@ public class LineTcpServerTest extends AbstractCairoTest {
             case WAIT_ILP_TABLE_RELEASE:
                 server.setSchedulerListener((tableName1, event) -> {
                     if (Chars.equals(tableName1, tableName1)) {
-                            releaseLatch.countDown();
+                        releaseLatch.countDown();
                     }
                 });
                 break;
@@ -985,6 +993,11 @@ public class LineTcpServerTest extends AbstractCairoTest {
         while (-latch.getCount() < value && iterations-- > 0) {
             Os.sleep(20);
         }
+    }
+
+    @FunctionalInterface
+    private interface LineTcpServerAwareContext {
+        void run(LineTcpServer server);
     }
 
 }

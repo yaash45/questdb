@@ -36,9 +36,13 @@ public interface LineProtoParser {
     int ERROR_ENCODING = 2;
     int ERROR_EMPTY = 3;
 
-    void onError(int position, int state, int code);
+    void clear();
 
-    void onEvent(CachedCharSequence token, int type, CharSequenceCache cache);
+    void commitAll(int commitMode);
 
-    void onLineEnd(CharSequenceCache cache);
+    void parse(long buf, long l);
+
+    void parseLast();
+
+    void withListener(LineProtoParserListener listener);
 }

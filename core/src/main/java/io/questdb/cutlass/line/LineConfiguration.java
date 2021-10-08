@@ -22,42 +22,8 @@
  *
  ******************************************************************************/
 
-package io.questdb.cutlass.line.udp;
+package io.questdb.cutlass.line;
 
-import io.questdb.cairo.CairoSecurityContext;
-import io.questdb.cutlass.line.LineConfiguration;
-import io.questdb.cutlass.line.LineProtoTimestampAdapter;
-import io.questdb.network.NetworkFacade;
-
-public interface LineUdpReceiverConfiguration extends LineConfiguration {
-
-    int getCommitMode();
-
-    int getBindIPv4Address();
-
-    int getCommitRate();
-
-    int getGroupIPv4Address();
-
-    int getMsgBufferSize();
-
-    int getMsgCount();
-
-    NetworkFacade getNetworkFacade();
-
-    int getPort();
-
-    int getReceiveBufferSize();
-
-    CairoSecurityContext getCairoSecurityContext();
-
-    boolean isEnabled();
-
-    boolean isUnicast();
-
-    boolean ownThread();
-
-    int ownThreadAffinity();
-
-    LineProtoTimestampAdapter getTimestampAdapter();
+public interface LineConfiguration {
+    int getDefaultPartitionBy();
 }

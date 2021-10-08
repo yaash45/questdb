@@ -25,6 +25,7 @@
 package io.questdb.cutlass.line.udp;
 
 import io.questdb.cairo.CairoEngine;
+import io.questdb.cutlass.line.CairoLineProtoParser;
 import io.questdb.cutlass.line.LineProtoLexer;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
@@ -41,7 +42,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class AbstractLineProtoReceiver extends SynchronizedJob implements Closeable {
     private static final Log LOG = LogFactory.getLog(AbstractLineProtoReceiver.class);
-    protected final LineProtoLexer lexer;
+    private final LineProtoLexer lexer;
+    protected final CairoLineProtoParserListener listener;
     protected final CairoLineProtoParser parser;
     protected final NetworkFacade nf;
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -78,8 +80,14 @@ public abstract class AbstractLineProtoReceiver extends SynchronizedJob implemen
             }
 
             lexer = new LineProtoLexer(configuration.getMsgBufferSize());
-            parser = new CairoLineProtoParser(engine, configuration.getCairoSecurityContext(), configuration.getTimestampAdapter());
-            lexer.withParser(parser);
+            listener = new CairoLineProtoParserListener(
+                    engine,
+                    configuration.getCairoSecurityContext(),
+                    configuration.getTimestampAdapter(),
+                    configuration.getDefaultPartitionBy()
+            );
+            parser = new CairoLineProtoParser(lexer, listener);
+//            lexer.withParser(parser);
 
             if (!configuration.ownThread()) {
                 workerPool.assign(this);
@@ -100,9 +108,9 @@ public abstract class AbstractLineProtoReceiver extends SynchronizedJob implemen
             } else {
                 LOG.info().$("closed [fd=").$(fd).$(']').$();
             }
-            if (parser != null) {
-                parser.commitAll(commitMode);
-                parser.close();
+            if (listener != null) {
+                listener.commitAll(commitMode);
+                listener.close();
             }
             Misc.free(lexer);
             LOG.info().$("closed [fd=").$(fd).$(']').$();

@@ -26,6 +26,7 @@ package io.questdb.cutlass.line.udp;
 
 import io.questdb.cairo.*;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
+import io.questdb.cutlass.line.CairoLineProtoParser;
 import io.questdb.cutlass.line.LineProtoLexer;
 import io.questdb.cutlass.line.LineProtoNanoTimestampAdapter;
 import io.questdb.std.*;
@@ -40,7 +41,7 @@ import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 
-public class CairoLineProtoParserTest extends AbstractCairoTest {
+public class CairoLineProtoParserListenerTest extends AbstractCairoTest {
 
     @Test
     public void testAddColumn() throws Exception {
@@ -57,6 +58,64 @@ public class CairoLineProtoParserTest extends AbstractCairoTest {
 
 
         assertThat(expected, lines, "tab");
+    }
+
+    @Test
+    public void testFieldValuesHasEqualsChar() throws Exception {
+        String expected = "ts_nsec\traw_msg\ttimestamp\n" +
+            "1111111111111111111\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+            "2222222222222222222\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+            "3333333333333333333\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+            "4444444444444444444\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+            "5555555555555555555\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n" +
+            "6666666666666666666\t_________________________________________________________________________________________________________ ____________\t2021-04-27T07:40:49.714000Z\n";
+
+        String lineData = "tab ts_nsec=1111111111111111111i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                + "tab ts_nsec=2222222222222222222i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                + "tab ts_nsec=3333333333333333333i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                + "tab ts_nsec=4444444444444444444i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                + "tab ts_nsec=5555555555555555555i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n"
+                + "tab ts_nsec=6666666666666666666i,raw_msg=\"_________________________________________________________________________________________________________ ____________\" 1619509249714000000\n";
+
+        assertThat(expected, lineData, "tab");
+    }
+
+    @Test
+    public void testFieldsReducedNonPartitioned() throws Exception {
+        try (TableModel m = new TableModel(configuration, "weather", PartitionBy.NONE)) {
+            m.col("windspeed", ColumnType.DOUBLE).timestamp();
+            CairoTestUtils.createTableWithVersion(m, ColumnType.VERSION);
+        }
+
+        String lineData =
+                "weather windspeed=2.0 631150000000000000\n" +
+                        "weather timetocycle=0.0,windspeed=3.0 631160000000000000\n" +
+                        "weather windspeed=4.0 631170000000000000\n";
+
+        String expected =
+                "windspeed\ttimestamp\ttimetocycle\n" +
+                        "2.0\t1989-12-31T23:26:40.000000Z\tNaN\n" +
+                        "3.0\t1990-01-01T02:13:20.000000Z\t0.0\n" +
+                        "4.0\t1990-01-01T05:00:00.000000Z\tNaN\n";
+
+        assertThat(expected, lineData, "weather");
+    }
+
+    @Test
+    public void testFieldsReducedO3() throws Exception {
+        String lineData =
+                "weather windspeed=1.0 631152000000000000\n" +
+                        "weather windspeed=2.0 631150000000000000\n" +
+                        "weather timetocycle=0.0,windspeed=3.0 631160000000000000\n" +
+                        "weather windspeed=4.0 631170000000000000\n";
+
+        String expected =
+                "windspeed\ttimestamp\ttimetocycle\n" +
+                        "2.0\t1989-12-31T23:26:40.000000Z\tNaN\n" +
+                        "1.0\t1990-01-01T00:00:00.000000Z\tNaN\n" +
+                        "3.0\t1990-01-01T02:13:20.000000Z\t0.0\n" +
+                        "4.0\t1990-01-01T05:00:00.000000Z\tNaN\n";
+        assertThat(expected, lineData, "weather");
     }
 
     @Test
@@ -712,7 +771,7 @@ public class CairoLineProtoParserTest extends AbstractCairoTest {
     private void assertThat(String expected, String lines, CharSequence tableName, CairoConfiguration configuration) throws Exception {
         TestUtils.assertMemoryLeak(() -> {
             try (CairoEngine engine = new CairoEngine(configuration)) {
-                try (CairoLineProtoParser parser = new CairoLineProtoParser(engine, AllowAllCairoSecurityContext.INSTANCE, LineProtoNanoTimestampAdapter.INSTANCE)) {
+                try (CairoLineProtoParserListener listener = new CairoLineProtoParserListener(engine, AllowAllCairoSecurityContext.INSTANCE, LineProtoNanoTimestampAdapter.INSTANCE, PartitionBy.DAY)) {
                     byte[] bytes = lines.getBytes(StandardCharsets.UTF_8);
                     int len = bytes.length;
                     long mem = Unsafe.malloc(len, MemoryTag.NATIVE_DEFAULT);
@@ -721,9 +780,9 @@ public class CairoLineProtoParserTest extends AbstractCairoTest {
                             Unsafe.getUnsafe().putByte(mem + i, bytes[i]);
                         }
                         try (LineProtoLexer lexer = new LineProtoLexer(4096)) {
-                            lexer.withParser(parser);
-                            lexer.parse(mem, mem + len);
-                            lexer.parseLast();
+                            CairoLineProtoParser parser = new CairoLineProtoParser(lexer, listener);
+                            parser.parse(mem, mem + len);
+                            parser.parseLast();
                             parser.commitAll(CommitMode.NOSYNC);
                         }
                     } finally {

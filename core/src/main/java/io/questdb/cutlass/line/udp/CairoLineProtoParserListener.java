@@ -40,9 +40,10 @@ import java.io.Closeable;
 
 import static io.questdb.cairo.TableUtils.TABLE_DOES_NOT_EXIST;
 import static io.questdb.cairo.TableUtils.TABLE_EXISTS;
+import static io.questdb.cutlass.line.LineProtoParser.*;
 
-public class CairoLineProtoParser implements LineProtoParser, Closeable {
-    private final static Log LOG = LogFactory.getLog(CairoLineProtoParser.class);
+public class CairoLineProtoParserListener implements LineProtoParserListener, Closeable {
+    private final static Log LOG = LogFactory.getLog(CairoLineProtoParserListener.class);
     private static final String WRITER_LOCK_REASON = "ilpUdp";
     private static final LineEndParser NOOP_LINE_END = cache -> {
     };
@@ -87,17 +88,20 @@ public class CairoLineProtoParser implements LineProtoParser, Closeable {
     private final FieldValueParser MY_TAG_VALUE = this::parseTagValue;
     private final FieldValueParser MY_FIELD_VALUE = this::parseFieldValue;
     private final FieldValueParser MY_NEW_FIELD_VALUE = this::parseFieldValueNewTable;
+    private final int defaultPartitionBy;
 
-    public CairoLineProtoParser(
+    public CairoLineProtoParserListener(
             CairoEngine engine,
             CairoSecurityContext cairoSecurityContext,
-            LineProtoTimestampAdapter timestampAdapter
+            LineProtoTimestampAdapter timestampAdapter,
+            int defaultPartitionBy
     ) {
         this.configuration = engine.getConfiguration();
         this.clock = configuration.getMicrosecondClock();
         this.engine = engine;
         this.cairoSecurityContext = cairoSecurityContext;
         this.timestampAdapter = timestampAdapter;
+        this.defaultPartitionBy = defaultPartitionBy;
     }
 
     @Override
@@ -547,7 +551,7 @@ public class CairoLineProtoParser implements LineProtoParser, Closeable {
 
         @Override
         public int getPartitionBy() {
-            return PartitionBy.NONE;
+            return defaultPartitionBy;
         }
 
         @Override

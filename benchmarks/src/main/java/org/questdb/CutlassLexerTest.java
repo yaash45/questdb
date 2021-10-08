@@ -24,10 +24,7 @@
 
 package org.questdb;
 
-import io.questdb.cutlass.line.CachedCharSequence;
-import io.questdb.cutlass.line.CharSequenceCache;
-import io.questdb.cutlass.line.LineProtoLexer;
-import io.questdb.cutlass.line.LineProtoParser;
+import io.questdb.cutlass.line.*;
 import io.questdb.std.MemoryTag;
 import io.questdb.std.Unsafe;
 import org.openjdk.jmh.annotations.*;
@@ -43,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class CutlassLexerTest {
 
+    private static final CairoLineProtoParser parser;
     private final static LineProtoLexer lpLexer = new LineProtoLexer(4096);
     private static final byte[] bytes = "measurement,tag=value,tag2=value field=10000i,field2=\"str\" 100000\n".getBytes();
     private static final long mem = Unsafe.malloc(bytes.length, MemoryTag.NATIVE_DEFAULT);
@@ -65,7 +63,7 @@ public class CutlassLexerTest {
 
     @Benchmark
     public void testSelectColumns() {
-        lpLexer.parse(mem, mem + bytes.length);
+        parser.parse(mem, mem + bytes.length);
     }
 
     static {
@@ -76,7 +74,12 @@ public class CutlassLexerTest {
     }
 
     static {
-        lpLexer.withParser(new LineProtoParser() {
+        parser = new CairoLineProtoParser(lpLexer, new LineProtoParserListener() {
+            @Override
+            public void commitAll(int commitMode) {
+
+            }
+
             @Override
             public void onError(int position, int state, int code) {
 

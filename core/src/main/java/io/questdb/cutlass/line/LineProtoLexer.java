@@ -33,6 +33,13 @@ import java.io.Closeable;
 
 public class LineProtoLexer implements Mutable, Closeable {
 
+    public enum ReturnState {
+        OK,
+        ON_EVENT,
+        ON_EOL,
+        ON_ERROR
+    }
+
     protected final CharSequenceCache charSequenceCache;
     private final ArrayBackedCharSink sink = new ArrayBackedCharSink();
     private final ArrayBackedCharSequence cs = new ArrayBackedCharSequence();
@@ -45,11 +52,15 @@ public class LineProtoLexer implements Mutable, Closeable {
     private long dstPos = 0;
     private long dstTop = 0;
     private boolean skipLine = false;
-    private LineProtoParser parser;
     private long utf8ErrorTop;
     private long utf8ErrorPos;
     private int errorCode = 0;
     private boolean unquoted = true;
+    private int continueStateValue = -1;
+    private int errorPosition;
+    private long position;
+    private byte lastByte;
+    private ReturnState lastReturnState = ReturnState.OK;
 
     public LineProtoLexer(int bufferSize) {
         buffer = Unsafe.malloc(bufferSize, MemoryTag.NATIVE_DEFAULT);
@@ -74,6 +85,9 @@ public class LineProtoLexer implements Mutable, Closeable {
         skipLine = false;
         unquoted = true;
         errorCode = 0;
+        continueStateValue = -1;
+        lastReturnState = ReturnState.OK;
+        lastByte = 0;
     }
 
     @Override
@@ -87,24 +101,65 @@ public class LineProtoLexer implements Mutable, Closeable {
      * @param bytesPtr byte array address
      * @param hi       high watermark for byte array address
      */
-    public void parse(long bytesPtr, long hi) {
-        parsePartial(bytesPtr, hi);
+    public ReturnState parse(long bytesPtr, long hi) {
+        processContinue();
+        return parsePartial(bytesPtr, hi);
     }
 
-    public void parseLast() {
+    private void processContinue() {
+        switch (lastReturnState) {
+            case ON_EVENT:
+                chop();
+                break;
+            case ON_EOL:
+                chop();
+                clear();
+                break;
+        }
+        lastReturnState = ReturnState.OK;
+        if (continueStateValue > -1) {
+            state = continueStateValue;
+            continueStateValue  = -1;
+        }
+        errorPosition = 0;
+    }
+
+    public ReturnState parseLast() {
+        processContinue();
         if (!skipLine) {
             dstPos += 2;
             try {
-                onEol();
+                return lastReturnState = onEol();
             } catch (LineProtoException e) {
-                parser.onError((int) (dstPos - 2 - buffer) / 2, state, errorCode);
+                errorPosition = (int) (dstPos - 2 - buffer) / 2;
+                return ReturnState.ON_ERROR;
             }
         }
-        clear();
+        return lastReturnState = ReturnState.ON_EOL;
     }
 
-    public void withParser(LineProtoParser parser) {
-        this.parser = parser;
+    public CharSequenceCache getCharCache() {
+        return charSequenceCache;
+    }
+
+    public int getErrorCode() {
+        return errorCode;
+    }
+
+    public int getErrorPosition() {
+        return errorPosition;
+    }
+
+    public long getLastPosition() {
+        return position;
+    }
+
+    public int getState() {
+        return state;
+    }
+
+    public CachedCharSequence getToken() {
+        return cs;
     }
 
     private void chop() {
@@ -122,57 +177,55 @@ public class LineProtoLexer implements Mutable, Closeable {
         // for extension
     }
 
-    private void fireEvent() throws LineProtoException {
+    private ReturnState fireEvent() throws LineProtoException {
         // two bytes less between these and one more byte so we don't have to use >=
         if (dstTop > dstPos - 3 && state != LineProtoParser.EVT_FIELD_VALUE) { // fields do take empty values, same as null
             errorCode = LineProtoParser.ERROR_EMPTY;
             throw LineProtoException.INSTANCE;
         }
-        parser.onEvent(cs, state, charSequenceCache);
-        chop();
+        return ReturnState.ON_EVENT;
     }
 
-    private void fireEventTransition(int evtTagName, int evtFieldName) {
+    private ReturnState fireEventTransition(int evtTagName, int evtFieldName) {
         switch (state) {
             case LineProtoParser.EVT_MEASUREMENT:
             case LineProtoParser.EVT_TAG_VALUE:
-                fireEvent();
-                state = evtTagName;
+                continueStateValue = evtTagName;
                 break;
             case LineProtoParser.EVT_FIELD_VALUE:
-                fireEvent();
-                state = evtFieldName;
+                continueStateValue = evtFieldName;
                 break;
             default:
                 errorCode = LineProtoParser.ERROR_EXPECTED;
                 throw LineProtoException.INSTANCE;
         }
+        return fireEvent();
     }
 
-    private void fireEventTransition2() {
+    private ReturnState fireEventTransition2() {
         switch (state) {
             case LineProtoParser.EVT_TAG_NAME:
-                fireEvent();
-                state = LineProtoParser.EVT_TAG_VALUE;
+                continueStateValue = LineProtoParser.EVT_TAG_VALUE;
                 break;
             case LineProtoParser.EVT_FIELD_NAME:
-                fireEvent();
-                state = LineProtoParser.EVT_FIELD_VALUE;
+                continueStateValue = LineProtoParser.EVT_FIELD_VALUE;
                 break;
             default:
                 errorCode = LineProtoParser.ERROR_EXPECTED;
                 throw LineProtoException.INSTANCE;
         }
+        return fireEvent();
     }
 
-    private void onComma() {
+    private ReturnState onComma() {
         if (!escapeQuote && unquoted) {
-            fireEventTransition(LineProtoParser.EVT_TAG_NAME, LineProtoParser.EVT_FIELD_NAME);
+            return fireEventTransition(LineProtoParser.EVT_TAG_NAME, LineProtoParser.EVT_FIELD_NAME);
         }
         escapeQuote = false;
+        return ReturnState.OK;
     }
 
-    protected void onEol() throws LineProtoException {
+    protected ReturnState onEol() throws LineProtoException {
         if (!escapeQuote) {
             switch (state) {
                 case LineProtoParser.EVT_MEASUREMENT:
@@ -181,52 +234,55 @@ public class LineProtoLexer implements Mutable, Closeable {
                 case LineProtoParser.EVT_TAG_VALUE:
                 case LineProtoParser.EVT_FIELD_VALUE:
                 case LineProtoParser.EVT_TIMESTAMP:
-                    fireEvent();
-                    parser.onLineEnd(charSequenceCache);
-                    clear();
-                    break;
+                    if (fireEvent() != ReturnState.OK) {
+                        return ReturnState.ON_EOL;
+                    }
                 default:
                     errorCode = LineProtoParser.ERROR_EXPECTED;
                     throw LineProtoException.INSTANCE;
             }
         }
+        return ReturnState.OK;
     }
 
-    private void onEquals() {
+    private ReturnState onEquals() {
         if (!escapeQuote && unquoted) {
-            fireEventTransition2();
+            return fireEventTransition2();
         }
         escapeQuote = false;
+        return ReturnState.OK;
     }
 
-    private void onEsc() { // '\' backslash
+    private ReturnState onEsc() { // '\' backslash
         if (!unquoted) {
             escapeQuote = true; // found in string
         } else {
             escape = true;
         }
+        return ReturnState.OK;
     }
 
-    private void onQuote(byte lastByte) {
+    private ReturnState onQuote(byte lastByte) {
         if (lastByte == (byte) '=' && !escapeQuote && unquoted) {
             unquoted = false; // open quote
         } else if (!unquoted && !escapeQuote) {
             unquoted = true; // close quote
         }
         escapeQuote = false;
+        return ReturnState.OK;
     }
 
-    private void onSpace() {
+    private ReturnState onSpace() {
         if (!escapeQuote && unquoted) {
-            fireEventTransition(LineProtoParser.EVT_FIELD_NAME, LineProtoParser.EVT_TIMESTAMP);
+            return fireEventTransition(LineProtoParser.EVT_FIELD_NAME, LineProtoParser.EVT_TIMESTAMP);
         }
         escapeQuote = false;
+        return ReturnState.OK;
     }
 
-    protected long parsePartial(final long bytesPtr, final long hi) {
+    protected ReturnState parsePartial(final long bytesPtr, final long hi) {
         long p = bytesPtr;
 
-        byte lastByte = (byte) 0;
         while (p < hi && !partialComplete()) {
 
             final byte b = Unsafe.getUnsafe().getByte(p);
@@ -261,39 +317,45 @@ public class LineProtoLexer implements Mutable, Closeable {
                     lastByte = b;
                     continue;
                 }
-
+                ReturnState yield = ReturnState.OK;
                 switch (b) {
                     case '"':
-                        onQuote(lastByte);
+                        yield = onQuote(lastByte);
                         break;
                     case '\\':
-                        onEsc();
+                        yield = onEsc();
                         break;
                     case '\n':
                     case '\r':
-                        onEol();
+                        yield = onEol();
                         break;
                     case ' ':
-                        onSpace();
+                        yield = onSpace();
                         break;
                     case ',':
-                        onComma();
+                        yield = onComma();
                         break;
                     case '=':
-                        onEquals();
+                        yield = onEquals();
                         break;
                     default:
                         escapeQuote = false;
                         break;
                 }
                 lastByte = b;
+                if (yield != ReturnState.OK) {
+                    position = p;
+                    return lastReturnState = yield;
+                }
             } catch (LineProtoException ex) {
                 skipLine = true;
-                parser.onError((int) (dstPos - 2 - buffer) / 2, state, errorCode);
+                errorPosition = (int) (dstPos - 2 - buffer) / 2;
+                position = p;
+                return lastReturnState = ReturnState.ON_ERROR;
             }
         }
-
-        return p;
+        position = p;
+        return ReturnState.OK;
     }
 
     protected boolean partialComplete() {

@@ -37,7 +37,7 @@ import org.junit.Test;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-public class CairoLineProtoParserSupportTest extends LineUdpInsertTest {
+public class CairoLineProtoParserListenerSupportTest extends LineUdpInsertTest {
     private static final String tableName = "table";
     private static final String targetColumnName = "column";
     private static final String locationColumnName = "location";

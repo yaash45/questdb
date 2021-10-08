@@ -2010,6 +2010,11 @@ public class PropServerConfiguration implements ServerConfiguration {
         }
 
         @Override
+        public int getDefaultPartitionBy() {
+            return lineDefaultPartitionBy;
+        }
+
+        @Override
         public int getGroupIPv4Address() {
             return lineUdpGroupIPv4Address;
         }

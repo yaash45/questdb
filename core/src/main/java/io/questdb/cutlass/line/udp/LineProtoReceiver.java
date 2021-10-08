@@ -57,8 +57,8 @@ public class LineProtoReceiver extends AbstractLineProtoReceiver {
         boolean ran = false;
         int count;
         while ((count = nf.recv(fd, buf, bufLen)) > 0) {
-            lexer.parse(buf, buf + count);
-            lexer.parseLast();
+            parser.parse(buf, buf + count);
+            parser.parseLast();
 
             totalCount++;
 
@@ -73,7 +73,7 @@ public class LineProtoReceiver extends AbstractLineProtoReceiver {
 
             ran = true;
         }
-        parser.commitAll(commitMode);
+        listener.commitAll(commitMode);
         return ran;
     }
 }

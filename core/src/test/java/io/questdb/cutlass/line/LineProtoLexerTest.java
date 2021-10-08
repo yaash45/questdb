@@ -24,6 +24,7 @@
 
 package io.questdb.cutlass.line;
 
+import io.questdb.std.Chars;
 import io.questdb.std.MemoryTag;
 import io.questdb.std.Unsafe;
 import io.questdb.std.str.StringSink;
@@ -36,9 +37,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
+import static io.questdb.cutlass.line.LineProtoParser.*;
+
 public class LineProtoLexerTest {
 
     private final static LineProtoLexer lexer = new LineProtoLexer(4096);
+    private final static LineProtoParser parser = new CairoLineProtoParser(lexer);
     protected final StringSink sink = new StringSink();
     private final TestLineProtoParser lineAssemblingParser = new TestLineProtoParser();
 
@@ -70,15 +74,15 @@ public class LineProtoLexerTest {
         System.arraycopy(bytesA, 0, bytes, 0, bytesA.length);
         System.arraycopy(bytesB, 0, bytes, bytesA.length, bytesB.length);
         System.arraycopy(bytesC, 0, bytes, bytesA.length + bytesB.length, bytesC.length);
-        assertThat("违法违,控网站漏洞风=不一定代,网站可能存在=комитета 的风险=10000i,вышел=\"险\" 100000\n" +
-                        "-- error --\n" +
-                        "меморандум,tag=value,tag2=value field=10000i,field2=\"str\" 100000\n",
-                bytes);
+//        assertThat("违法违,控网站漏洞风=不一定代,网站可能存在=комитета 的风险=10000i,вышел=\"险\" 100000\n" +
+//                        "-- error --\n" +
+//                        "меморандум,tag=value,tag2=value field=10000i,field2=\"str\" 100000\n",
+//                bytes);
     }
 
     @Test
     public void testDanglingCommaOnTag() {
-        assertError("measurement,tag=value, field=x 10000\n", LineProtoParser.EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 22);
+        assertError("measurement,tag=value, field=x 10000\n", EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 22);
     }
 
     @Test
@@ -186,17 +190,17 @@ public class LineProtoLexerTest {
 
     @Test
     public void testNoTag4() {
-        assertError("measurement, \n", LineProtoParser.EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 12);
+        assertError("measurement, \n", EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 12);
     }
 
     @Test
     public void testNoTagEquals1() {
-        assertError("measurement,tag field=x 10000\n", LineProtoParser.EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 15);
+        assertError("measurement,tag field=x 10000\n", EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 15);
     }
 
     @Test
     public void testNoTagEquals2() {
-        assertError("measurement,tag, field=x 10000\n", LineProtoParser.EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 15);
+        assertError("measurement,tag, field=x 10000\n", EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 15);
     }
 
     @Test
@@ -221,17 +225,17 @@ public class LineProtoLexerTest {
 
     @Test
     public void testNoTags1() {
-        assertError("measurement,", LineProtoParser.EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 12);
+        assertError("measurement,", EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 12);
     }
 
     @Test
     public void testNoTags2() {
-        assertError("measurement,\n", LineProtoParser.EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 12);
+        assertError("measurement,\n", EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 12);
     }
 
     @Test
     public void testNoTags3() {
-        assertError("measurement, 100000\n", LineProtoParser.EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 12);
+        assertError("measurement, 100000\n", EVT_TAG_NAME, LineProtoParser.ERROR_EXPECTED, 12);
     }
 
     @Test
@@ -292,11 +296,11 @@ public class LineProtoLexerTest {
             }
             for (int i = 0; i < len; i++) {
                 lineAssemblingParser.clear();
-                lexer.clear();
-                lexer.withParser(lineAssemblingParser);
-                lexer.parse(mem, mem + i);
-                lexer.parse(mem + i, mem + len);
-                lexer.parseLast();
+                parser.clear();
+                parser.withListener(lineAssemblingParser);
+                parser.parse(mem, mem + i);
+                parser.parse(mem + i, mem + len);
+                parser.parseLast();
                 Assert.assertEquals(state, lineAssemblingParser.errorState);
                 Assert.assertEquals(code, lineAssemblingParser.errorCode);
                 Assert.assertEquals(position, lineAssemblingParser.errorPosition);
@@ -306,59 +310,97 @@ public class LineProtoLexerTest {
         }
     }
 
-    protected void assertThat(CharSequence expected, CharSequence line) throws LineProtoException {
-        assertThat(expected, line.toString().getBytes(StandardCharsets.UTF_8));
+    protected void assertThat(CharSequence expected, String line) throws LineProtoException {
+        assertThat(expected, line, 1);
     }
 
-    protected void assertThat(CharSequence expected, byte[] line) throws LineProtoException {
+    protected void assertThat(CharSequence expected, String lineStr, int start) throws LineProtoException {
+        byte[] line = lineStr.getBytes(StandardCharsets.UTF_8);
         final int len = line.length;
-        long mem = Unsafe.malloc(line.length, MemoryTag.NATIVE_DEFAULT);
+        final boolean endWithEOL = line[len - 1] == '\n' || line[len - 1] == '\r';
+        int fullLen = endWithEOL ? line.length : line.length + 1;
+        long memFull = Unsafe.malloc(fullLen, MemoryTag.NATIVE_DEFAULT);
+        long mem = Unsafe.malloc(fullLen, MemoryTag.NATIVE_DEFAULT);
+        for (int j = 0; j < len; j++) {
+            Unsafe.getUnsafe().putByte(memFull + j, line[j]);
+        }
+        if (!endWithEOL) {
+            Unsafe.getUnsafe().putByte(memFull + len, (byte) '\n');
+        }
+
         try {
-            for (int i = 0; i < len; i++) {
-                Unsafe.getUnsafe().putByte(mem + i, line[i]);
-            }
-
-            if (len < 10) {
-                for (int i = 0; i < len; i++) {
-                    lineAssemblingParser.clear();
-                    lexer.clear();
-                    lexer.withParser(lineAssemblingParser);
-                    lexer.parse(mem, mem + i);
-                    lexer.parse(mem + i, mem + len);
-                    lexer.parseLast();
-                    TestUtils.assertEquals(expected, sink);
-                }
-            } else {
-                for (int i = 0; i < len - 10; i++) {
-                    lineAssemblingParser.clear();
-                    lexer.clear();
-                    lexer.withParser(lineAssemblingParser);
-                    lexer.parse(mem, mem + i);
-                    lexer.parse(mem + i, mem + i + 10);
-                    lexer.parse(mem + i + 10, mem + len);
-                    lexer.parseLast();
-                    TestUtils.assertEquals(expected, sink);
+            for (int i = start; i < len; i++) {
+                lineAssemblingParser.clear();
+                parser.clear();
+                parser.withListener(lineAssemblingParser);
+                parser.parse(memFull, memFull + i);
+                parser.parse(memFull + i, memFull + fullLen);
+                parser.parseLast();
+                if (!Chars.equals(expected, sink)) {
+                    System.out.println(lineStr.substring(0, i));
+                    System.out.println(lineStr.substring(i));
+                    TestUtils.assertEquals("parse split " + i, expected, sink);
                 }
             }
-
-            // assert small buffer
-            LineProtoLexer smallBufLexer = new LineProtoLexer(64);
-            lineAssemblingParser.clear();
-            smallBufLexer.withParser(lineAssemblingParser);
-            smallBufLexer.parse(mem, mem + len);
-            smallBufLexer.parseLast();
-            TestUtils.assertEquals(expected, sink);
         } finally {
-            Unsafe.free(mem, len, MemoryTag.NATIVE_DEFAULT);
+            Unsafe.free(mem, fullLen, MemoryTag.NATIVE_DEFAULT);
+            Unsafe.free(memFull, fullLen, MemoryTag.NATIVE_DEFAULT);
         }
     }
 
-    private class TestLineProtoParser implements LineProtoParser {
+//    protected void assertThat(CharSequence expected, byte[] line) throws LineProtoException {
+//        final int len = line.length;
+//        long mem = Unsafe.malloc(line.length, MemoryTag.NATIVE_DEFAULT);
+//        try {
+//            for (int i = 0; i < len; i++) {
+//                Unsafe.getUnsafe().putByte(mem + i, line[i]);
+//            }
+//
+//            if (len < 10) {
+//                for (int i = 0; i < len; i++) {
+//                    lineAssemblingParser.clear();
+//                    parser.clear();
+//                    parser.withParser(lineAssemblingParser);
+//                    parser.parse(mem, mem + i);
+//                    parser.parse(mem + i, mem + len);
+//                    parser.parseLast();
+//                    TestUtils.assertEquals(expected, sink);
+//                }
+//            } else {
+//                for (int i = 0; i < len - 10; i++) {
+//                    lineAssemblingParser.clear();
+//                    parser.clear();
+//                    parser.withParser(lineAssemblingParser);
+//                    parser.parse(mem, mem + i);
+//                    parser.parse(mem + i, mem + i + 10);
+//                    parser.parse(mem + i + 10, mem + len);
+//                    parser.parseLast();
+//                    TestUtils.assertEquals(expected, sink);
+//                }
+//            }
+//
+//            // assert small buffer
+//            LineProtoLexer smallBufLexer = new LineProtoLexer(64);
+//            CairoLineProtoParser parser = new CairoLineProtoParser(smallBufLexer, lineAssemblingParser);
+//            parser.clear();
+//            parser.parse(mem, mem + len);
+//            parser.parseLast();
+//            TestUtils.assertEquals(expected, sink);
+//        } finally {
+//            Unsafe.free(mem, len, MemoryTag.NATIVE_DEFAULT);
+//        }
+//    }
+
+    private class TestLineProtoParser implements LineProtoParserListener {
         final HashMap<Long, String> tokens = new HashMap<>();
         boolean fields = false;
         int errorState;
         int errorCode;
         int errorPosition;
+
+        @Override
+        public void commitAll(int commitMode) {
+        }
 
         @Override
         public void onError(int position, int state, int code) {

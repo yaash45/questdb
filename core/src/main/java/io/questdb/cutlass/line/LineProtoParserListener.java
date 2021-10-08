@@ -22,42 +22,14 @@
  *
  ******************************************************************************/
 
-package io.questdb.cutlass.line.udp;
+package io.questdb.cutlass.line;
 
-import io.questdb.cairo.CairoSecurityContext;
-import io.questdb.cutlass.line.LineConfiguration;
-import io.questdb.cutlass.line.LineProtoTimestampAdapter;
-import io.questdb.network.NetworkFacade;
+public interface LineProtoParserListener {
+    void commitAll(int commitMode);
 
-public interface LineUdpReceiverConfiguration extends LineConfiguration {
+    void onError(int position, int state, int code);
 
-    int getCommitMode();
+    void onEvent(CachedCharSequence token, int type, CharSequenceCache cache);
 
-    int getBindIPv4Address();
-
-    int getCommitRate();
-
-    int getGroupIPv4Address();
-
-    int getMsgBufferSize();
-
-    int getMsgCount();
-
-    NetworkFacade getNetworkFacade();
-
-    int getPort();
-
-    int getReceiveBufferSize();
-
-    CairoSecurityContext getCairoSecurityContext();
-
-    boolean isEnabled();
-
-    boolean isUnicast();
-
-    boolean ownThread();
-
-    int ownThreadAffinity();
-
-    LineProtoTimestampAdapter getTimestampAdapter();
+    void onLineEnd(CharSequenceCache cache);
 }
